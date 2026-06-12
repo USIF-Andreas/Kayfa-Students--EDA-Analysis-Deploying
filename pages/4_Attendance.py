@@ -36,10 +36,12 @@ col_a, col_b = st.columns(2)
 with col_a:
     status_counts = attendance["status"].value_counts().reset_index()
     status_counts.columns = ["status", "count"]
+    status_counts["label"] = status_counts["status"].str.capitalize()
     fig = px.pie(
-        status_counts, values="count", names="status", color="status",
+        status_counts, values="count", names="label", color="status",
         color_discrete_map={"attended": "#10b981", "absent": "#ef4444"}, hole=0.5,
         title="Attendance vs Absence",
+        category_orders={"label": ["Attended", "Absent"]},
     )
     fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
