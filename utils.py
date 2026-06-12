@@ -43,7 +43,7 @@ def load_all():
         "engagement": load_engagement(),
     }
 
-LOGO_PATH = f"/workspaces/Kayfa-Students--EDA-Analysis-Deploying/download (14).png"
+LOGO_PATH = f"{BASE}/download (14).png"
 
 # ── Logo ───────────────────────────────────────────────────────────────────
 
