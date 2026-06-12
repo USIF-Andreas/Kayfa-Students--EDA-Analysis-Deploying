@@ -3,9 +3,14 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from utils import load_all, page_config
+from utils import load_all, page_config, show_logo, show_top_logo
+
+if "engagement_events" not in st.session_state:
+    st.session_state.engagement_events = None
 
 page_config("Kayfa Students — Executive Dashboard", "📊")
+show_logo()
+show_top_logo()
 
 data = load_all()
 master = data["master"]
