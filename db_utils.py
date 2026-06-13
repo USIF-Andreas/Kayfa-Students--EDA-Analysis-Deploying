@@ -9,10 +9,12 @@ from datetime import datetime
 import json
 import os
 
-MONGO_URI = st.secrets.get("mongo", {}).get("uri", "") or (
-    "mongodb+srv://yousefandraws32_db_user:IzsF5qjxc8mNva8s@kayfa.np3dv8l.mongodb.net/"
-    "?retryWrites=true&w=majority&appName=Kayfa"
-)
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+MONGO_URI = st.secrets.get("mongo", {}).get("uri", "") or os.environ.get("MONGO_URI", "")
 
 LOCAL_DIR = os.path.join(os.path.dirname(__file__), ".local_db")
 os.makedirs(LOCAL_DIR, exist_ok=True)

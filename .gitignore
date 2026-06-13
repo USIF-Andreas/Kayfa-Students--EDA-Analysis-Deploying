@@ -1,0 +1,12 @@
+# Environment variables
+.env
+
+# MongoDB local fallback
+.local_db/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Streamlit
+.streamlit/secrets.toml
