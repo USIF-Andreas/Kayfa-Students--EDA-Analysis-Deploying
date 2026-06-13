@@ -8,8 +8,6 @@ import pandas as pd
 from datetime import datetime
 import json
 import os
-
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
