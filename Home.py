@@ -143,3 +143,17 @@ fig = px.pie(
 )
 fig.update_layout(template="plotly_dark", height=400, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
 st.plotly_chart(fig, use_container_width=True)
+
+st.divider()
+
+st.header("🧠 Deep Analysis Pages")
+st.markdown("""
+| Page | Questions Covered |
+|---|---|
+| 🔍 Group Integrity | Q12 — True vs stated group sizes · Q13 — Unviable group merger recommendation |
+| 📈 Engagement Trends | Q1 — Attendance rate by group · Q5 — Engagement vs performance · Q9 — Cohort dip detection |
+| 🎯 Performance Deep Dive | Q2 — Score volatility by type · Q3 — Course comparison · Q4 — Attendance vs grade · Q8 — Late submissions vs scores |
+| 📉 Curriculum Weak Spots | Q6 — Highest failure concepts · Q7 — Weakest concept mastery over time |
+| ⚠️ Student Risk & Segmentation | Q10 — Age bands vs outcomes · Q11 — K-Means segmentation · Q14 — At-risk ranking |
+| 📊 Group Performance Trends | Q15 — Group grade trajectories |
+""")
