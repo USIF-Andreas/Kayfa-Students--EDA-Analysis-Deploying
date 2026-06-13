@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from utils import load_data, page_config, show_logo, show_top_logo
+from db_utils import require_auth
+
+require_auth()
 
 page_config("Kayfa Students — Academic Performance", "📚")
 show_logo()

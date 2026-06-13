@@ -1,165 +1,132 @@
 import streamlit as st
-import plotly.express as px
+import pandas as pd
 from utils import load_data, page_config, show_logo, show_top_logo
+from db_utils import authenticate_user, register_user, logout, db_available
 
-page_config("Kayfa Students — Executive Dashboard", "📊")
+page_config("Kayfa Students", "📊")
 show_logo()
 show_top_logo()
 
 master = load_data()
 
-st.title("📊 Kayfa Student Analytics")
-st.markdown("##### Executive Dashboard — High-Level Overview of Student Performance & Engagement")
+# ── Login / Logout ──
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
 
-total_students = len(master)
-avg_attendance = master["attendance_rate_pct"].mean()
-avg_concept_score = master["avg_concept_score"].mean()
+if not st.session_state["authenticated"]:
+    st.title("🔐 Kayfa Student Analytics")
+    st.markdown("##### Sign in to access the dashboard")
+
+    if not db_available():
+        st.info("⚠️ **MongoDB Atlas unreachable** — using local file storage. Login/register will work.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Login")
+        with st.form("login_form"):
+            l_user = st.text_input("Username", key="login_user")
+            l_pass = st.text_input("Password", type="password", key="login_pass")
+            if st.form_submit_button("Login", use_container_width=True):
+                ok, msg = authenticate_user(l_user, l_pass)
+                if ok:
+                    st.session_state["authenticated"] = True
+                    st.session_state["username"] = l_user
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+    with col2:
+        st.subheader("Register")
+        with st.form("register_form"):
+            r_user = st.text_input("Username", key="reg_user")
+            r_pass = st.text_input("Password", type="password", key="reg_pass")
+            r_confirm = st.text_input("Confirm Password", type="password", key="reg_confirm")
+            if st.form_submit_button("Register", use_container_width=True):
+                if r_pass != r_confirm:
+                    st.error("Passwords do not match")
+                elif len(r_pass) < 4:
+                    st.error("Password must be at least 4 characters")
+                else:
+                    ok, msg = register_user(r_user, r_pass)
+                    if ok:
+                        st.success(msg)
+                        st.info("You can now log in.")
+                    else:
+                        st.error(msg)
+    st.stop()
+
+# ── Authenticated: show data info ──
+st.success(f"✅ Logged in as **{st.session_state['username']}**")
+if st.button("Logout"):
+    logout()
+
+st.title("📊 Kayfa Student Analytics")
+st.markdown("##### Dataset Overview")
+
+total = len(master)
+courses = master["course_name"].nunique()
+cities = master["city"].nunique()
+instructors = master["instructor"].nunique()
+pass_count = master["passed"].sum()
+fail_count = (~master["passed"]).sum()
+avg_grade = master["avg_grade"].mean()
+avg_concept = master["avg_concept_score"].mean()
+avg_att = master["attendance_rate_pct"].mean()
 avg_fail_rate = master["concept_fail_pct"].mean()
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Students", f"{total_students}")
-col2.metric("Avg Attendance", f"{avg_attendance:.1f}%")
-col3.metric("Avg Concept Score", f"{avg_concept_score:.1f}%")
-col4.metric("Avg Fail Rate", f"{avg_fail_rate:.1f}%")
+col1.metric("Total Students", total)
+col2.metric("Courses", courses)
+col3.metric("Cities", cities)
+col4.metric("Instructors", instructors)
+
+col5, col6, col7, col8 = st.columns(4)
+col5.metric("Passed", pass_count)
+col6.metric("Failed", fail_count)
+col7.metric("Avg Grade", f"{avg_grade:.1f}%")
+col8.metric("Avg Concept Score", f"{avg_concept:.1f}%")
+
+col9, col10, col11, col12 = st.columns(4)
+col9.metric("Avg Attendance", f"{avg_att:.1f}%")
+col10.metric("Avg Fail Rate", f"{avg_fail_rate:.1f}%")
+col11.metric("Total Events", f"{master['total_events'].sum():,.0f}")
+col12.metric("Total Submissions", f"{master['total_submissions'].sum():,.0f}")
 
 st.divider()
 
-col_left, col_right = st.columns(2)
-
-with col_left:
-    category_avg = master.groupby("category")["avg_concept_score"].agg(["mean", "count"]).reset_index()
-    category_avg.columns = ["category", "avg_score", "count"]
-    category_avg["label"] = category_avg["category"] + " (n=" + category_avg["count"].astype(str) + ")"
-    fig = px.bar(
-        category_avg,
-        x="avg_score",
-        y="label",
-        orientation="h",
-        color="avg_score",
-        color_continuous_scale="Blues",
-        title="Average Concept Score by Category",
-    )
-    fig.update_layout(template="plotly_dark", yaxis={"categoryorder": "total ascending"},
-                      height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
-
-with col_right:
-    diff_avg = master.groupby("difficulty_level")["avg_concept_score"].agg(["mean", "count"]).reset_index()
-    diff_avg.columns = ["difficulty", "avg_score", "count"]
-    diff_avg["label"] = diff_avg["difficulty"] + " (n=" + diff_avg["count"].astype(str) + ")"
-    fig = px.bar(
-        diff_avg,
-        x="difficulty",
-        y="avg_score",
-        color="difficulty",
-        color_discrete_sequence=["#10b981", "#f59e0b", "#ef4444"],
-        title="Average Score by Difficulty Level",
-    )
-    fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
+st.subheader("Column Overview")
+col_info = pd.DataFrame({
+    "Column": master.columns,
+    "Type": master.dtypes.values,
+    "Non-Null": master.count().values,
+    "Unique": [master[c].nunique() for c in master.columns],
+    "Sample": [str(master[c].iloc[0]) for c in master.columns],
+})
+st.dataframe(col_info, use_container_width=True, hide_index=True)
 
 st.divider()
 
-col3, col4 = st.columns(2)
-
-with col3:
-    instructor_avg = master.groupby("instructor")["avg_concept_score"].mean().reset_index()
-    instructor_avg = instructor_avg.sort_values("avg_concept_score")
-    fig = px.bar(
-        instructor_avg,
-        x="avg_concept_score",
-        y="instructor",
-        orientation="h",
-        color="avg_concept_score",
-        color_continuous_scale="Greens",
-        title="Average Concept Score by Instructor",
-    )
-    fig.update_layout(template="plotly_dark", yaxis={"categoryorder": "total ascending"},
-                      height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
-
-with col4:
-    instructor_att = master.groupby("instructor")["attendance_rate_pct"].mean().reset_index()
-    instructor_att = instructor_att.sort_values("attendance_rate_pct")
-    fig = px.bar(
-        instructor_att,
-        x="attendance_rate_pct",
-        y="instructor",
-        orientation="h",
-        color="attendance_rate_pct",
-        color_continuous_scale="RdYlGn",
-        title="Average Attendance Rate by Instructor",
-    )
-    fig.update_layout(template="plotly_dark", yaxis={"categoryorder": "total ascending"},
-                      height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
+st.subheader("Data Summary")
+st.dataframe(master.describe(), use_container_width=True)
 
 st.divider()
 
-col5, col6 = st.columns(2)
-
-with col5:
-    passed_counts = master["passed"].value_counts().reset_index()
-    passed_counts.columns = ["passed", "count"]
-    passed_counts["label"] = passed_counts["passed"].map({True: "Passed", False: "Failed"})
-    fig = px.pie(
-        passed_counts,
-        values="count",
-        names="label",
-        color="label",
-        color_discrete_map={"Passed": "#10b981", "Failed": "#ef4444"},
-        hole=0.4,
-        title="Overall Pass/Fail Rate",
-    )
-    fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
-
-with col6:
-    fig = px.histogram(
-        master, x="avg_grade", nbins=25, color_discrete_sequence=["#6366f1"],
-        title="Average Grade Distribution",
-        labels={"avg_grade": "Average Grade %"},
-    )
-    fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
-
-st.divider()
-
-col7, col8 = st.columns(2)
-
-with col7:
-    fig = px.scatter(
-        master, x="attendance_rate_pct", y="avg_concept_score",
-        color="difficulty_level", size="concept_fail_pct",
-        hover_data=["student_id", "instructor"],
-        color_discrete_map={"Beginner": "#10b981", "Intermediate": "#f59e0b", "Advanced": "#ef4444"},
-        title="Attendance vs Concept Score (bubble = fail rate)",
-        labels={"attendance_rate_pct": "Attendance %", "avg_concept_score": "Avg Concept Score"},
-    )
-    fig.update_layout(template="plotly_dark", height=400, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
-
-with col8:
-    fig = px.scatter(
-        master, x="avg_time_spent", y="avg_concept_score",
-        color="category", size="total_submissions",
-        hover_data=["student_id", "course_name"],
-        title="Time Spent vs Concept Score (bubble = submissions)",
-        labels={"avg_time_spent": "Avg Time Spent (min)", "avg_concept_score": "Avg Concept Score"},
-    )
-    fig.update_layout(template="plotly_dark", height=400, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
-
-st.divider()
-
-st.header("🧠 Deep Analysis Pages")
+st.subheader("Available Pages")
 st.markdown("""
-| Page | Questions Covered |
+| Page | Description |
 |---|---|
-| 🔍 Group Integrity | Q12 — True vs stated group sizes · Q13 — Unviable group merger recommendation |
-| 📈 Engagement Trends | Q1 — Attendance rate by group · Q5 — Engagement vs performance · Q9 — Cohort dip detection |
-| 🎯 Performance Deep Dive | Q2 — Score volatility by type · Q3 — Course comparison · Q4 — Attendance vs grade · Q8 — Late submissions vs scores |
-| 📉 Curriculum Weak Spots | Q6 — Highest failure concepts · Q7 — Weakest concept mastery over time |
-| ⚠️ Student Risk & Segmentation | Q10 — Age bands vs outcomes · Q11 — K-Means segmentation · Q14 — At-risk ranking |
-| 📊 Group Performance Trends | Q15 — Group grade trajectories |
+| 👥 Demographics | Age, gender, city distribution |
+| 📚 Academic Performance | Grades, concept scores, course comparison |
+| ⚡ Engagement | Events, video watch time, time spent |
+| 📅 Attendance | Attendance rates by group, instructor, course |
+| 📝 Submissions | Late rates, time spent, submission patterns |
+| 🎯 Insights | Instructor ranking, recommendations, verdict |
+| 🔍 Group Integrity | Group sizes, unviable group detection |
+| 📈 Engagement Trends | Attendance & engagement correlations |
+| 🎯 Performance Deep Dive | Course comparison, attendance vs grade |
+| 📉 Curriculum Weak Spots | High-failure concepts and courses |
+| ⚠️ Student Risk & Segmentation | Age bands, clustering, at-risk ranking |
+| 📊 Group Performance Trends | Group-level performance comparison |
 """)
