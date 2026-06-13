@@ -59,6 +59,7 @@ with col1:
                       xaxis_title="Attendance %", yaxis_title="",
                       margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("Group 07 (C005, Eng. Hossam Refaat) at 61.4% is the lowest — 18.3pp below the platform average. Group 05 (C003) leads at 87.0%.")
 
 with col2:
     below = att_by_group[att_by_group["avg_att_rate"] < platform_avg]
@@ -188,6 +189,7 @@ fig.update_xaxes(title_text="Week")
 fig.update_yaxes(title_text="Attendance %", secondary_y=False)
 fig.update_yaxes(title_text="Engagement Events", secondary_y=True)
 st.plotly_chart(fig, use_container_width=True)
+st.caption("Engagement halves in early March (weeks of Mar 2-16) — coincides with C005 Assignment 2 & 3 deadlines. Attendance dips 9pp in late December (holidays).")
 
 # Identify dips
 min_att = att_weekly.loc[att_weekly["att_rate"].idxmin()]
@@ -219,6 +221,7 @@ fig = px.area(
 fig.update_layout(template="plotly_dark", height=300,
                   margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
 st.plotly_chart(fig, use_container_width=True)
+st.caption("The 50% engagement drop in early March is the single largest disruption. Possible causes: mid-term burnout, difficult assignments clustering, or a platform issue.")
 
 st.info(
     "**Proposed Explanation:** The early-March engagement drop (~50% reduction) coincides with "

@@ -58,6 +58,7 @@ with col1:
         margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11),
     )
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("Age 26-30 performs best (71.6%). The 21-25 band (largest cohort at 260 students) has the highest fail rate at 25%.")
 
 with col2:
     fig = go.Figure()
@@ -74,6 +75,7 @@ with col2:
         margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11),
     )
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("Attendance peaks at 82.8% for ages 26-30. The 31-35 band (n=2) is too small for reliable conclusions.")
 
 col3, col4 = st.columns(2)
 
@@ -86,6 +88,7 @@ with col3:
     fig.update_layout(template="plotly_dark", height=350,
                       margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("52% of students are aged 21-25. Only 9% are over 25 — the platform skews young.")
 
 with col4:
     # Engagement by age band
@@ -119,6 +122,7 @@ with col4:
         legend=dict(orientation="h", y=1.1),
     )
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("Engagement is relatively flat across age bands. Age 26-30 shows slightly higher video consumption (12,250s vs 10,450s for 21-25).")
 
 best_age = age_analysis.loc[age_analysis["Avg Grade %"].idxmax()]
 st.info(
@@ -206,6 +210,7 @@ with col5:
     fig.update_layout(template="plotly_dark", height=400,
                       margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("Cluster 2 (orange, 19% of students) is the most concerning — low scores (58.1%) with many concept failures (13.1 avg). Cluster 0 (blue) are the high-achievers.")
 
 with col6:
     fig = px.scatter(
@@ -219,6 +224,7 @@ with col6:
     fig.update_layout(template="plotly_dark", height=400,
                       margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("Engagement separates clusters clearly. The bottom-left quadrant (low events, low scores) is where intervention resources should focus.")
 
 # Cluster profile table
 st.subheader("Cluster Profiles")

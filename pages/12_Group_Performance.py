@@ -85,6 +85,7 @@ with col1:
         hovermode="x unified",
     )
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("Most groups show flat trajectories (slope ≈ 0). No group is significantly improving. G10 shows decline but is a single-student group.")
 
 with col2:
     st.subheader("Trend Summary")
@@ -126,6 +127,7 @@ with col3:
             fig.update_layout(template="plotly_dark", height=250,
                               margin=dict(l=0, r=0, t=30, b=0), font=dict(size=10))
             st.plotly_chart(fig, use_container_width=True)
+            st.caption(f"Slope={row['slope']:.3f} — a small positive trend.")
     else:
         st.info("No groups show a significant upward trend.")
 
@@ -144,6 +146,7 @@ with col4:
             fig.update_layout(template="plotly_dark", height=250,
                               margin=dict(l=0, r=0, t=30, b=0), font=dict(size=10))
             st.plotly_chart(fig, use_container_width=True)
+            st.caption(f"Slope={row['slope']:.3f} — a declining trajectory worth monitoring.")
     else:
         st.info("No groups show a significant downward trend (beyond G10 which has only 1 student).")
 

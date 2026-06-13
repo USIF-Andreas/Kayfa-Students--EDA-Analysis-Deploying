@@ -49,6 +49,7 @@ with col_a:
         margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11),
     )
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("🔴 G10 overstated by 96.8% (stated 31, actual 1). G05 overstated by 39.5% (stated 76, actual 46).")
 
 with col_b:
     flagged = size_compare[size_compare["discrepancy"] != 0].copy()
@@ -62,6 +63,7 @@ with col_b:
     fig.update_layout(template="plotly_dark", height=400,
                       margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("Negative values = group was overstated in self-reported counts. G10 and G05 need immediate data reconciliation.")
 
 flagged = size_compare[size_compare["discrepancy"] != 0]
 st.subheader("Discrepant Groups")
@@ -93,6 +95,7 @@ with col_c:
     fig.update_layout(template="plotly_dark", height=400,
                       margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("G10 has only 1 student — well below the 10-student viability threshold (red dashed line).")
 
 with col_d:
     if len(unviable) > 0:

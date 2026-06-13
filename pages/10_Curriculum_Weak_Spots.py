@@ -54,6 +54,7 @@ with col1:
         margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11),
     )
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("C005 dominates the top-10 failing concepts. Assignment 3 fails nearly half the class (48.3%). This is the curriculum's biggest weak spot.")
 
 with col2:
     worst = concept_fail.iloc[0]
@@ -121,6 +122,7 @@ with col3:
         margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11),
     )
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("Assignment 3 scores improved from 60.1 to 64.8 across successive dates — later cohorts performed slightly better, but the pass threshold (50%) remains a risk.")
 
 with col4:
     first_half = by_date.iloc[:len(by_date)//2]["avg_score"].mean()
