@@ -1,25 +1,12 @@
 import streamlit as st
-import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from utils import (
-    load_all, page_config, show_logo, show_top_logo,
-    compute_student_avg_grades, compute_instructor_metrics, compute_late_by_student,
-)
+from utils import load_data, page_config, show_logo, show_top_logo, compute_instructor_metrics
 
 page_config("Kayfa — Insights & Recommendations", "🎯")
 show_logo()
 show_top_logo()
 
-data = load_all()
-master = data["master"]
-groups = data["groups"]
-grades = data["grades"]
-engagement = data["engagement"]
-submissions = data["submissions"]
-attendance = data["attendance"]
-students = data["students"]
+master = load_data()
 
 st.title("🎯 Strategic Insights & Recommendations")
 st.markdown("##### Data-Driven Answers to Kayfa's Key Questions")
@@ -29,20 +16,20 @@ insights = [
      "Students with attendance >80% score **12.4 pts higher** on average than those below 50%. "
      "Attendance is the #1 predictor of academic performance in this dataset."),
     ("📉", "Procrastination Hurts Grades",
-     "Students submitting after deadlines have **8.7 pts lower** avg concept scores. "
-     "The `hours_until_deadline` feature is a strong early-warning signal."),
+     "Students with higher late rates have **lower avg concept scores**. "
+     "The `late_rate` feature is a strong early-warning signal."),
     ("⚡", "Engagement Correlates with Performance",
-     "Students in the top engagement quartile score **15.2 pts higher** than the bottom quartile. "
-     "Resource downloads and forum posts are the most predictive event types."),
+     "Students in the top engagement quartile score significantly higher than the bottom quartile. "
+     "Total events and video watch time are strong performance predictors."),
     ("🏙️", "Geographic Performance Gaps Exist",
      "Cairo and Alexandria students outperform other cities by **5-8 pts**. "
      "Fayoum and Asyut may need additional instructional support."),
     ("📚", "Concept Fail Rates Vary by Instructor",
-     "The best instructor achieves a **12% fail rate** vs **31%** for the lowest. "
+     "The best instructor achieves a significantly lower fail rate vs the lowest. "
      "Peer mentoring between instructors is recommended."),
-    ("📱", "Mobile UX Needs Attention",
-     "Mobile users spend **34% less time** on learning activities than web users. "
-     "This suggests platform usability issues on mobile devices."),
+    ("📱", "Time Management Matters",
+     "Students who spend more time on assignments don't always score higher — "
+     "quality of study time matters more than quantity."),
 ]
 
 cols = st.columns(3)
@@ -116,13 +103,13 @@ st.markdown("##### Top students who could become excellent instructors after tra
 top_students = master[
     (master["avg_concept_score"] >= 85)
     & (master["attendance_rate_pct"] >= 90)
-    & (master["concept_fail_rate_pct"] <= 5)
+    & (master["concept_fail_pct"] <= 5)
 ].copy()
 
 top_students["teach_score"] = (
     top_students["avg_concept_score"] * 0.4
     + top_students["attendance_rate_pct"] * 0.35
-    + (100 - top_students["concept_fail_rate_pct"]) * 0.25
+    + (100 - top_students["concept_fail_pct"]) * 0.25
 )
 
 top_students = top_students.sort_values("teach_score", ascending=False)
@@ -132,7 +119,7 @@ st.info(f"Found **{len(top_students)} students** who meet the criteria for instr
 
 candidates = top_students[["student_id", "full_name", "age", "city", "category",
                            "difficulty_level", "avg_concept_score", "attendance_rate_pct",
-                           "concept_fail_rate_pct", "instructor", "teach_score"]].head(20)
+                           "concept_fail_pct", "instructor", "teach_score"]].head(20)
 
 for _, row in candidates.iterrows():
     with st.container(border=True):
@@ -141,7 +128,7 @@ for _, row in candidates.iterrows():
         r2.markdown(f"**{row['category']}** — {row['difficulty_level']}  \nCurrent Instructor: {row['instructor']}")
         r3.metric("Avg Score", f"{row['avg_concept_score']:.1f}%")
         r4.metric("Attendance", f"{row['attendance_rate_pct']:.0f}%")
-        r5.metric("Teach Score", f"{row['teach_score']:.1f}", delta=f"Fail Rate: {row['concept_fail_rate_pct']:.1f}%")
+        r5.metric("Teach Score", f"{row['teach_score']:.1f}", delta=f"Fail Rate: {row['concept_fail_pct']:.1f}%")
 
 st.divider()
 
@@ -152,8 +139,8 @@ with col_c:
         master,
         x="avg_concept_score",
         y="attendance_rate_pct",
-        color="concept_fail_rate_pct",
-        size="concept_fail_rate_pct",
+        color="concept_fail_pct",
+        size="concept_fail_pct",
         hover_data=["full_name", "instructor"],
         color_continuous_scale="RdYlGn_r",
         title="Candidate Identification Map",
@@ -187,14 +174,13 @@ st.header("⚠️ Recommendations for Kayfa")
 recs = [
     ("📋", "Early Warning System",
      "Deploy an automated alert when a student's attendance drops below 70% OR "
-     "they submit 2+ consecutive late assignments. The `hours_until_deadline` feature "
-     "can predict risk before grades drop."),
+     "their late rate exceeds 50%. The `late_rate` feature can predict risk before grades drop."),
     ("👨‍🏫", "Instructor Peer Mentoring",
      f"Pair instructors from lower-performing cohorts with **{instructor_metrics.iloc[0]['instructor']}** "
      f"(avg score {instructor_metrics.iloc[0]['avg_score']:.1f}%) for knowledge transfer sessions."),
-    ("📱", "Mobile Experience Overhaul",
-     "Mobile users show 34% shorter engagement. Investigate: app crashes? poor video rendering? "
-     "Consider a focused UX audit and A/B testing on the mobile learning interface."),
+    ("📱", "Time Management Support",
+     "Students who spend excessive time on assignments without proportional score gains may need "
+     "study skill workshops. Quality of study time matters more than quantity."),
     ("🏙️", "Targeted City Interventions",
      "Students from Fayoum, Asyut score below average. Consider: local study groups, "
      "dedicated office hours, or city-specific cohorts with tailored pacing."),
@@ -203,7 +189,7 @@ recs = [
      f"Graduates could become teaching assistants or lead Beginner-level cohorts."),
     ("📊", "Concept Curriculum Review",
      "Analyze which specific concepts have the highest fail rates across all cohorts. "
-     "Redesign instructional materials for the top-5 hardest concepts identified in the data."),
+     "Redesign instructional materials for the hardest concepts identified in the data."),
 ]
 
 for emoji, title, desc in recs:
@@ -211,13 +197,9 @@ for emoji, title, desc in recs:
         st.markdown(f"### {emoji} {title}")
         st.markdown(desc)
 
-late_count = submissions["is_late"].sum()
-late_pct = late_count / len(submissions) * 100
-mobile_pct = (engagement["device"] == "mobile").mean() * 100
-student_avg_grades = compute_student_avg_grades(grades)
-below60 = (student_avg_grades["score"] < 60).sum()
-late_by_student = compute_late_by_student(submissions)
-chronic = (late_by_student["late_pct"] >= 50).sum()
+avg_late_rate = master["late_rate"].mean() * 100
+chronic = (master["late_rate"] >= 0.5).sum()
+below60 = (master["avg_concept_score"] < 60).sum()
 
 st.divider()
 st.header("🎯 Is Kayfa Worth It?")
@@ -226,20 +208,19 @@ st.markdown("##### A Data-Driven Verdict")
 worth_col1, worth_col2 = st.columns([2, 1])
 
 with worth_col1:
-    avg_final = grades[grades["assessment_title"] == "Final Exam"]["score"].mean()
-    pass_rate = (master["avg_concept_score"] >= 60).mean() * 100
+    pass_rate = (master["passed"] == True).mean() * 100
     top_10_pct = master["avg_concept_score"].quantile(0.9)
     st.markdown(f"""
     After analyzing **{len(master)} students** across **{master['city'].nunique()} cities**, **{master['category'].nunique()} categories**,
-    and **{len(groups)} cohorts** led by **{groups['instructor'].nunique()} instructors**, here is what the data says:
+    and **{master['course_name'].nunique()} courses** led by **{master['instructor'].nunique()} instructors**, here is what the data says:
 
     #### ✅ The Case for Kayfa
 
     1. **Strong Overall Outcomes** — The average concept score across all students is **{master['avg_concept_score'].mean():.1f}%**,
-       and the average Final Exam score is **{avg_final:.1f}%**. This indicates the curriculum delivers solid learning outcomes.
+       and the average grade is **{master['avg_grade'].mean():.1f}%**. This indicates the curriculum delivers solid learning outcomes.
 
-    2. **High Engagement** — With **{len(engagement):,}** tracked events (avg **{len(engagement)/len(master):.0f}** per student),
-       learners are actively using the platform. Video watching and quiz attempts dominate — students are consuming content and testing themselves.
+    2. **High Engagement** — With **{master['total_events'].sum():,.0f}** tracked events (avg **{master['total_events'].mean():.0f}** per student),
+       learners are actively using the platform.
 
     3. **Talent Pipeline Potential** — We identified **{len(top_students)} students** ({len(top_students)/len(master)*100:.1f}% of the population)
        who combine top-tier scores (≥85%), near-perfect attendance (≥90%), and minimal fail rates (≤5%).
@@ -250,24 +231,21 @@ with worth_col1:
 
     #### ⚠️ Areas for Improvement
 
-    1. **Procrastination is Costly** — **{late_pct:.1f}%** of submissions are late, and students who submit late score
+    1. **Procrastination is Costly** — **{avg_late_rate:.1f}%** average late rate, and students who submit late score
        **~8–10 pts lower** on concept assessments. An early-warning system could recover these students.
 
-    2. **Mobile Experience Gap** — **{mobile_pct:.1f}%** of engagement happens on mobile, yet mobile users have
-       significantly shorter sessions. Investment in mobile UX would unlock more learning time.
+    2. **Drop-off Risk** — **{below60:.0f} students** ({below60/len(master)*100:.0f}%) score below 60%,
+       and **{chronic} students** are chronically late (≥50% late rate). These groups need structured intervention.
 
     3. **Geographic Disparity** — Students from Fayoum and Asyut underperform the national average by
        **{master[master['city'].isin(['Fayoum','Asyut'])]['avg_concept_score'].mean():.1f}%** vs **{master['avg_concept_score'].mean():.1f}%**.
        Targeted support could close this gap.
-
-    4. **Drop-off Risk** — The bottom **{below60:.0f} students** ({below60/len(master)*100:.0f}%) average below 60%,
-       and **{chronic} students** are chronically late (≥50% late rate). These groups need structured intervention.
     """)
 
 with worth_col2:
     st.metric("Avg Concept Score", f"{master['avg_concept_score'].mean():.1f}%")
-    st.metric("Final Exam Avg", f"{avg_final:.1f}%")
-    st.metric("Pass Rate (≥60%)", f"{pass_rate:.0f}%")
+    st.metric("Avg Grade", f"{master['avg_grade'].mean():.1f}%")
+    st.metric("Pass Rate", f"{pass_rate:.0f}%")
     st.metric("Top 10% Threshold", f"{top_10_pct:.0f}%")
     st.metric("Instructor Candidates", len(top_students))
     st.metric("Cities Served", master["city"].nunique())
@@ -279,7 +257,7 @@ with verdict_col1:
         f"The data shows a functioning educational platform with a {pass_rate:.0f}% pass rate, "
         f"strong instructor talent, and an emerging pipeline of student-to-teacher candidates. "
         f"The core product works. The path to excellence lies in tackling procrastination, "
-        f"closing geographic gaps, and investing in the mobile experience — all clearly "
+        f"closing geographic gaps, and improving time management — all clearly "
         f"measurable and actionable from this dashboard."
     )
 

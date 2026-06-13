@@ -1,138 +1,100 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from utils import (
-    load_all, page_config, show_logo, show_top_logo,
-    compute_weekly_engagement, compute_student_engagement_count,
-)
-
-if "engagement_events" not in st.session_state:
-    st.session_state.engagement_events = None
+from utils import load_data, page_config, show_logo, show_top_logo
 
 page_config("Kayfa Students — Engagement", "⚡")
 show_logo()
 show_top_logo()
 
-data = load_all()
-engagement = data["engagement"]
-master = data["master"]
-
-engagement["event_datetime"] = pd.to_datetime(engagement["event_datetime"])
+master = load_data()
 
 st.title("⚡ Engagement & Behavioral Analytics")
-st.markdown("##### Platform Interaction, Learning Styles & Device Usage")
+st.markdown("##### Platform Interaction & Learning Activity Summary")
 
-total_events = len(engagement)
-total_students = engagement["student_id"].nunique()
-avg_duration = engagement["duration_seconds"].dropna().mean()
-mobile_pct = (engagement["device"] == "mobile").mean() * 100
+total_events = master["total_events"].sum()
+total_video_sec = master["total_video_seconds"].sum()
+avg_events = master["total_events"].mean()
+avg_video_hrs = master["total_video_seconds"].mean() / 3600
+avg_time = master["avg_time_spent"].mean()
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Events", f"{total_events:,}")
-col2.metric("Active Students", total_students)
-col3.metric("Avg Duration", f"{avg_duration:.0f}s")
-col4.metric("Mobile Usage", f"{mobile_pct:.1f}%")
+col1.metric("Total Events", f"{total_events:,.0f}")
+col2.metric("Total Video Time", f"{total_video_sec/3600:.0f}h")
+col3.metric("Avg Events/Student", f"{avg_events:.0f}")
+col4.metric("Avg Time Spent", f"{avg_time:.0f} min")
 
 st.divider()
-
-event_options = sorted(engagement["event_type"].unique())
-if st.session_state.engagement_events is None:
-    st.session_state.engagement_events = event_options
-
-selected_events = st.multiselect(
-    "Filter Event Types",
-    options=event_options,
-    default=event_options,
-    key="engagement_events",
-)
-
-filtered = engagement[engagement["event_type"].isin(selected_events)]
 
 col_a, col_b = st.columns(2)
 
 with col_a:
-    evt_counts = filtered["event_type"].value_counts().reset_index()
-    evt_counts.columns = ["event_type", "count"]
-    fig = px.bar(
-        evt_counts, x="event_type", y="count", color="event_type",
-        color_discrete_map={
-            "login": "#6366f1", "video_watch": "#14b8a6",
-            "resource_download": "#f59e0b", "quiz_attempt": "#8b5cf6",
-            "forum_post": "#f43f5e",
-        },
-        title="Events by Type", labels={"event_type": "", "count": "Count"},
+    fig = px.histogram(
+        master, x="total_events", nbins=30, color_discrete_sequence=["#6366f1"],
+        title="Total Events per Student", labels={"total_events": "Events"},
     )
     fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
-    top_evt = evt_counts.iloc[0]
-    st.caption(f"Logins dominate ({top_evt['count']:,} events — {top_evt['count']/len(engagement)*100:.0f}% of all activity). Forum posts are the rarest, suggesting low peer interaction.")
+    low_events = (master["total_events"] < 50).sum()
+    st.caption(f"Most students generate 50-100 events. {low_events} students ({low_events/len(master)*100:.0f}%) have fewer than 50 — likely disengaged.")
 
 with col_b:
-    dev_counts = filtered["device"].value_counts().reset_index()
-    dev_counts.columns = ["device", "count"]
-    fig = px.pie(
-        dev_counts, values="count", names="device", color="device",
-        color_discrete_map={"web": "#6366f1", "mobile": "#14b8a6"}, hole=0.5,
-        title="Device Usage",
+    fig = px.histogram(
+        master, x="total_video_seconds", nbins=30, color_discrete_sequence=["#14b8a6"],
+        title="Total Video Watch Time per Student", labels={"total_video_seconds": "Seconds"},
     )
     fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
-    web_pct = dev_counts[dev_counts["device"] == "web"]["count"].values[0] / len(filtered) * 100
-    st.caption(f"Web is preferred ({web_pct:.0f}% of events). With {100-web_pct:.0f}% on mobile, the platform should ensure feature parity and smooth experience on both devices.")
-
-st.divider()
-
-weekly = compute_weekly_engagement(engagement)
-fig = px.area(
-    weekly, x="week", y="events",
-    title="Engagement Activity Over Time (Weekly)",
-    labels={"week": "Week", "events": "Events"},
-)
-fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-st.plotly_chart(fig, use_container_width=True)
-peak_week = weekly.loc[weekly["events"].idxmax()]
-st.caption(f"Activity peaked around {peak_week['week'].date()} ({peak_week['events']:,.0f} events). Engagement may drop in later weeks — a pattern to monitor for course completion strategies.")
+    median_vid = master["total_video_seconds"].median()
+    st.caption(f"Median video watch time is {median_vid:.0f}s. The distribution is right-skewed — most watches are moderate, with a tail of heavy viewers.")
 
 st.divider()
 
 col_c, col_d = st.columns(2)
 
 with col_c:
-    cross = pd.crosstab(engagement["event_type"], engagement["device"])
-    fig = px.imshow(
-        cross, text_auto=True, color_continuous_scale="Viridis",
-        title="Event Type × Device Heatmap",
+    fig = px.histogram(
+        master, x="avg_time_spent", nbins=30, color_discrete_sequence=["#f59e0b"],
+        title="Avg Time Spent on Assignments", labels={"avg_time_spent": "Minutes"},
     )
     fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
-    st.caption("Mobile usage is proportionally higher for logins and quiz attempts. Video watching skews heavily toward web, possibly due to streaming quality on mobile.")
+    med_time = master["avg_time_spent"].median()
+    st.caption(f"Median time spent is {med_time:.0f} minutes. The distribution varies widely across students.")
 
 with col_d:
-    videos = engagement[
-        (engagement["event_type"] == "video_watch")
-        & (engagement["duration_seconds"] > 0)
-        & (engagement["duration_seconds"] < 3600)
-    ]
-    fig = px.histogram(
-        videos, x="duration_seconds", nbins=40, color_discrete_sequence=["#14b8a6"],
-        title="Video Watch Duration", labels={"duration_seconds": "Duration (seconds)"},
+    fig = px.scatter(
+        master, x="total_events", y="avg_concept_score",
+        color="category", hover_data=["student_id", "course_name"],
+        title="Events vs Concept Score",
+        labels={"total_events": "Total Events", "avg_concept_score": "Avg Concept Score"},
     )
     fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
     st.plotly_chart(fig, use_container_width=True)
-    median_vid = videos["duration_seconds"].median()
-    st.caption(f"Median video watch time is {median_vid:.0f}s. The distribution is right-skewed — most watches are short, with a long tail of longer sessions.")
+    st.caption("Positive trend: more engagement events generally correlate with higher concept scores.")
 
 st.divider()
 
-events_per_student = compute_student_engagement_count(engagement)
-fig = px.histogram(
-    events_per_student, x="total_events", nbins=25, color_discrete_sequence=["#f59e0b"],
-    title="Events per Student Distribution",
-    labels={"total_events": "Total Events"},
-)
-fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-st.plotly_chart(fig, use_container_width=True)
-low_events = (events_per_student["total_events"] < 20).sum()
-st.caption(f"Most students generate 20–80 events. {low_events} students ({low_events/len(events_per_student)*100:.0f}%) have fewer than 20 events — likely disengaged and at risk of dropping out.")
+col_e, col_f = st.columns(2)
+
+with col_e:
+    fig = px.scatter(
+        master, x="total_video_seconds", y="avg_concept_score",
+        color="difficulty_level", hover_data=["student_id"],
+        title="Video Watch Time vs Concept Score",
+        labels={"total_video_seconds": "Video Watch (seconds)", "avg_concept_score": "Avg Concept Score"},
+    )
+    fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Video consumption correlates positively with scores — students who watch more content perform better.")
+
+with col_f:
+    fig = px.scatter(
+        master, x="avg_time_spent", y="avg_concept_score",
+        color="category", hover_data=["student_id"],
+        title="Time Spent vs Concept Score",
+        labels={"avg_time_spent": "Avg Time (min)", "avg_concept_score": "Avg Concept Score"},
+    )
+    fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Diminishing returns on time spent — very high time investment doesn't guarantee proportionally higher scores.")
