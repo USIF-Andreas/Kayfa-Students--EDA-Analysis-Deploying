@@ -1,13 +1,18 @@
 import pandas as pd
 import streamlit as st
+import os
 
-BASE = "."
+BASE = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH = os.path.join(BASE, "master_student_features (1).csv")
 
 @st.cache_data
 def load_data():
-    return pd.read_csv(f"{BASE}/master_student_features (1).csv")
+    return pd.read_csv(CSV_PATH)
 
-LOGO_PATH = f"{BASE}/logo.png"
+def load_all():
+    return {"master": load_data()}
+
+LOGO_PATH = os.path.join(BASE, "logo.png")
 
 def show_logo():
     st.sidebar.image(LOGO_PATH, width="stretch")
