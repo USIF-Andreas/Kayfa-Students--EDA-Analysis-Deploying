@@ -76,24 +76,6 @@ avg_concept = master["avg_concept_score"].mean()
 avg_att = master["attendance_rate_pct"].mean()
 avg_fail_rate = master["concept_fail_pct"].mean()
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Students", total)
-col2.metric("Courses", courses)
-col3.metric("Cities", cities)
-col4.metric("Instructors", instructors)
-
-col5, col6, col7, col8 = st.columns(4)
-col5.metric("Passed", pass_count)
-col6.metric("Failed", fail_count)
-col7.metric("Avg Grade", f"{avg_grade:.1f}%")
-col8.metric("Avg Concept Score", f"{avg_concept:.1f}%")
-
-col9, col10, col11, col12 = st.columns(4)
-col9.metric("Avg Attendance", f"{avg_att:.1f}%")
-col10.metric("Avg Fail Rate", f"{avg_fail_rate:.1f}%")
-col11.metric("Total Events", f"{master['total_events'].sum():,.0f}")
-col12.metric("Total Submissions", f"{master['total_submissions'].sum():,.0f}")
-
 st.divider()
 
 st.subheader("Column Overview")
