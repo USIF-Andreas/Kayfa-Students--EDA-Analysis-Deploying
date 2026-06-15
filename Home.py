@@ -77,24 +77,6 @@ avg_att = master["attendance_rate_pct"].mean()
 avg_fail_rate = master["concept_fail_pct"].mean()
 
 st.divider()
-
-st.subheader("Column Overview")
-col_info = pd.DataFrame({
-    "Column": master.columns,
-    "Type": master.dtypes.values,
-    "Non-Null": master.count().values,
-    "Unique": [master[c].nunique() for c in master.columns],
-    "Sample": [str(master[c].iloc[0]) for c in master.columns],
-})
-st.dataframe(col_info, use_container_width=True, hide_index=True)
-
-st.divider()
-
-st.subheader("Data Summary")
-st.dataframe(master.describe(), use_container_width=True)
-
-st.divider()
-
 st.subheader("Available Pages")
 st.markdown("""
 | Page | Description |
