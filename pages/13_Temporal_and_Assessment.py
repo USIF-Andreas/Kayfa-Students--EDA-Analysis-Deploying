@@ -29,25 +29,35 @@ def load_engagement():
 def load_grades():
     return pd.read_csv(os.path.join(BASE, "clean_grades.csv"), parse_dates=["date"])
 
-att = load_attendance()
-eng = load_engagement()
+att_raw = load_attendance()
+eng_raw = load_engagement()
 grades = load_grades()
+
+# ── Filter to the specific 6-month term: Dec 2025 → May 2026 ──
+TERM_START = pd.Timestamp("2025-12-01")
+TERM_END = pd.Timestamp("2026-05-31 23:59:59")
+
+att = att_raw[(att_raw["session_datetime"] >= TERM_START) & (att_raw["session_datetime"] <= TERM_END)].copy()
+eng = eng_raw[(eng_raw["event_datetime"] >= TERM_START) & (eng_raw["event_datetime"] <= TERM_END)].copy()
+
+# Month labels for the 6-month term
+MONTH_LABELS = {12: "Dec 2025", 1: "Jan 2026", 2: "Feb 2026", 3: "Mar 2026", 4: "Apr 2026", 5: "May 2026"}
 
 # ═══════════════════════════════════════════════════════════════════
 # SECTION 1 — Attendance & Engagement Over the 6-Month Term
 # ═══════════════════════════════════════════════════════════════════
 
 st.title("📉 Temporal Trends & Assessment Analysis")
-st.markdown("##### Tracking cohort-wide participation and score volatility over the full term")
+st.markdown("##### Tracking cohort-wide participation and score volatility across the Dec 2025 → May 2026 term")
 st.divider()
 
 st.header("Q1: Attendance & Engagement Over the 6-Month Term")
-st.markdown("_Is there a window where the whole cohort dips at once?_")
+st.markdown("_Dec 2025 → May 2026 · Is there a window where the whole cohort dips at once?_")
 
-# ── Attendance: weekly attendance rate ──
-att["week"] = att["session_datetime"].dt.to_period("W").apply(lambda r: r.start_time)
-att_weekly = (
-    att.groupby("week")
+# ── Monthly aggregation (cleaner than weekly for 6 months) ──
+att["month"] = att["session_datetime"].dt.to_period("M").apply(lambda r: r.start_time)
+att_monthly = (
+    att.groupby("month")
     .apply(lambda g: pd.Series({
         "attended": (g["status"] == "attended").sum(),
         "total": len(g),
@@ -55,237 +65,252 @@ att_weekly = (
         "unique_students": g["student_id"].nunique(),
     }))
     .reset_index()
+    .sort_values("month")
 )
+att_monthly["month_label"] = att_monthly["month"].dt.strftime("%b %Y")
 
-# ── Engagement: weekly event count per student ──
+eng["month"] = eng["event_datetime"].dt.to_period("M").apply(lambda r: r.start_time)
+eng_monthly = (
+    eng.groupby("month")
+    .agg(total_events=("event_id", "count"), unique_students=("student_id", "nunique"))
+    .reset_index()
+    .sort_values("month")
+)
+eng_monthly["events_per_student"] = eng_monthly["total_events"] / eng_monthly["unique_students"]
+eng_monthly["month_label"] = eng_monthly["month"].dt.strftime("%b %Y")
+
+# ── Also compute weekly for detailed chart ──
+att["week"] = att["session_datetime"].dt.to_period("W").apply(lambda r: r.start_time)
+att_weekly = (
+    att.groupby("week")
+    .apply(lambda g: pd.Series({
+        "rate": (g["status"] == "attended").mean() * 100,
+        "unique_students": g["student_id"].nunique(),
+    }))
+    .reset_index()
+    .sort_values("week")
+)
+att_weekly["rolling_mean"] = att_weekly["rate"].rolling(4, min_periods=2, center=True).mean()
+att_weekly["rolling_std"] = att_weekly["rate"].rolling(4, min_periods=2, center=True).std()
+att_weekly["is_dip"] = att_weekly["rate"] < (att_weekly["rolling_mean"] - att_weekly["rolling_std"])
+dip_weeks = att_weekly[att_weekly["is_dip"]]
+
 eng["week"] = eng["event_datetime"].dt.to_period("W").apply(lambda r: r.start_time)
 eng_weekly = (
     eng.groupby("week")
-    .agg(
-        total_events=("event_id", "count"),
-        unique_students=("student_id", "nunique"),
-    )
+    .agg(total_events=("event_id", "count"), unique_students=("student_id", "nunique"))
     .reset_index()
+    .sort_values("week")
 )
 eng_weekly["events_per_student"] = eng_weekly["total_events"] / eng_weekly["unique_students"]
 
-# ── Merge & Align ──
-merged = pd.merge(att_weekly, eng_weekly, on="week", how="outer", suffixes=("_att", "_eng"))
-merged = merged.sort_values("week")
-
-# ── Detect cohort-wide dip ──
-# A "dip" = attendance rate drops > 1 std below the rolling mean
-att_weekly_sorted = att_weekly.sort_values("week")
-att_weekly_sorted["rolling_mean"] = att_weekly_sorted["rate"].rolling(4, min_periods=2, center=True).mean()
-att_weekly_sorted["rolling_std"] = att_weekly_sorted["rate"].rolling(4, min_periods=2, center=True).std()
-att_weekly_sorted["is_dip"] = att_weekly_sorted["rate"] < (att_weekly_sorted["rolling_mean"] - att_weekly_sorted["rolling_std"])
-
-dip_weeks = att_weekly_sorted[att_weekly_sorted["is_dip"]]
-
-# ── Also detect engagement dip ──
-eng_weekly_sorted = eng_weekly.sort_values("week")
-eng_weekly_sorted["rolling_mean"] = eng_weekly_sorted["events_per_student"].rolling(4, min_periods=2, center=True).mean()
-eng_weekly_sorted["rolling_std"] = eng_weekly_sorted["events_per_student"].rolling(4, min_periods=2, center=True).std()
-eng_weekly_sorted["is_dip"] = eng_weekly_sorted["events_per_student"] < (eng_weekly_sorted["rolling_mean"] - eng_weekly_sorted["rolling_std"])
-
-eng_dip_weeks = eng_weekly_sorted[eng_weekly_sorted["is_dip"]]
-
 # ── KPI metrics ──
-col_m1, col_m2, col_m3, col_m4 = st.columns(4)
 overall_att_rate = (att["status"] == "attended").mean() * 100
-col_m1.metric("Avg Attendance Rate", f"{overall_att_rate:.1f}%")
-col_m2.metric("Total Engagement Events", f"{len(eng):,}")
+col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+col_m1.metric("Term Attendance Rate", f"{overall_att_rate:.1f}%")
+col_m2.metric("Total Events (6 mo)", f"{len(eng):,}")
 col_m3.metric("Attendance Dip Weeks", f"{len(dip_weeks)}")
-col_m4.metric("Engagement Dip Weeks", f"{len(eng_dip_weeks)}")
+lowest_month = att_monthly.loc[att_monthly["rate"].idxmin()]
+col_m4.metric("Weakest Month", lowest_month["month_label"], f"{lowest_month['rate']:.1f}%")
 
 st.markdown("")
 
-# ── Dual-axis time series chart ──
-fig = make_subplots(specs=[[{"secondary_y": True}]])
+# ── CHART 1: Monthly attendance bar + engagement line (separated, clear) ──
+st.subheader("📊 Monthly Attendance Rate & Engagement Events")
 
-# Attendance line
-fig.add_trace(
+fig1 = make_subplots(specs=[[{"secondary_y": True}]])
+
+# Attendance as colored bars — green for above avg, orange/red for below
+avg_rate = att_monthly["rate"].mean()
+bar_colors = ["#10b981" if r >= avg_rate else "#ef4444" for r in att_monthly["rate"]]
+
+fig1.add_trace(
+    go.Bar(
+        x=att_monthly["month_label"], y=att_monthly["rate"],
+        name="Attendance Rate %",
+        marker_color=bar_colors,
+        text=[f"{r:.1f}%" for r in att_monthly["rate"]],
+        textposition="outside", textfont=dict(size=13, color="white"),
+        opacity=0.85,
+    ),
+    secondary_y=False,
+)
+
+# Avg line
+fig1.add_hline(
+    y=avg_rate, line_dash="dot", line_color="#fbbf24", line_width=2,
+    annotation_text=f"Avg: {avg_rate:.1f}%", annotation_position="top left",
+    annotation_font_color="#fbbf24", secondary_y=False,
+)
+
+# Engagement as line on secondary axis
+fig1.add_trace(
     go.Scatter(
-        x=att_weekly_sorted["week"], y=att_weekly_sorted["rate"],
-        name="Attendance Rate %", mode="lines+markers",
+        x=eng_monthly["month_label"], y=eng_monthly["events_per_student"],
+        name="Engagement / Student",
+        mode="lines+markers+text",
         line=dict(color="#6366f1", width=3),
-        marker=dict(size=6),
-        hovertemplate="Week: %{x|%b %d}<br>Attendance: %{y:.1f}%<extra></extra>",
-    ),
-    secondary_y=False,
-)
-
-# Rolling mean
-fig.add_trace(
-    go.Scatter(
-        x=att_weekly_sorted["week"], y=att_weekly_sorted["rolling_mean"],
-        name="Attendance Trend (4-wk avg)", mode="lines",
-        line=dict(color="#6366f1", width=1.5, dash="dash"),
-        opacity=0.5,
-    ),
-    secondary_y=False,
-)
-
-# Engagement events per student
-fig.add_trace(
-    go.Scatter(
-        x=eng_weekly_sorted["week"], y=eng_weekly_sorted["events_per_student"],
-        name="Engagement / Student", mode="lines+markers",
-        line=dict(color="#14b8a6", width=3),
-        marker=dict(size=6),
-        hovertemplate="Week: %{x|%b %d}<br>Events/Student: %{y:.1f}<extra></extra>",
+        marker=dict(size=10, color="#6366f1", line=dict(width=2, color="white")),
+        text=[f"{v:.1f}" for v in eng_monthly["events_per_student"]],
+        textposition="top center", textfont=dict(size=11, color="#a5b4fc"),
     ),
     secondary_y=True,
 )
 
-# Highlight dip weeks with red markers
-if not dip_weeks.empty:
-    fig.add_trace(
-        go.Scatter(
-            x=dip_weeks["week"], y=dip_weeks["rate"],
-            name="⚠ Attendance Dip", mode="markers",
-            marker=dict(size=14, color="#ef4444", symbol="diamond", line=dict(width=2, color="white")),
-            hovertemplate="DIP WEEK: %{x|%b %d}<br>Rate: %{y:.1f}%<extra></extra>",
-        ),
-        secondary_y=False,
-    )
-
-if not eng_dip_weeks.empty:
-    fig.add_trace(
-        go.Scatter(
-            x=eng_dip_weeks["week"], y=eng_dip_weeks["events_per_student"],
-            name="⚠ Engagement Dip", mode="markers",
-            marker=dict(size=14, color="#f59e0b", symbol="diamond", line=dict(width=2, color="white")),
-            hovertemplate="DIP WEEK: %{x|%b %d}<br>Events/Student: %{y:.1f}<extra></extra>",
-        ),
-        secondary_y=True,
-    )
-
-fig.update_layout(
-    template="plotly_dark", height=480,
-    title="Attendance Rate & Engagement Over the 6-Month Term",
-    legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center"),
-    margin=dict(l=0, r=0, t=50, b=0), font=dict(size=12),
-    hovermode="x unified",
+fig1.update_layout(
+    template="plotly_dark", height=420,
+    title=dict(text="Attendance vs Engagement — Month by Month (Dec 2025 → May 2026)", font=dict(size=16)),
+    legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center", font=dict(size=12)),
+    margin=dict(l=10, r=10, t=60, b=10), font=dict(size=12),
+    bargap=0.35,
 )
-fig.update_xaxes(title_text="Week", tickformat="%b %d, %Y")
-fig.update_yaxes(title_text="Attendance Rate %", secondary_y=False, range=[0, 105])
-fig.update_yaxes(title_text="Engagement Events / Student", secondary_y=True)
+fig1.update_yaxes(title_text="Attendance Rate %", range=[0, 110], secondary_y=False)
+fig1.update_yaxes(title_text="Events per Student", secondary_y=True)
+fig1.update_xaxes(title_text="")
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig1, use_container_width=True)
+st.caption("🟢 Green bars = above average attendance · 🔴 Red bars = below average · 🟣 Purple line = engagement per student")
+
+st.markdown("")
+
+# ── CHART 2: Weekly detail (area chart, easier to read) ──
+st.subheader("📈 Weekly Attendance Detail (with Dip Detection)")
+
+fig2 = go.Figure()
+
+# Area fill for attendance
+fig2.add_trace(go.Scatter(
+    x=att_weekly["week"], y=att_weekly["rate"],
+    name="Weekly Attendance %", mode="lines",
+    line=dict(color="#6366f1", width=2),
+    fill="tozeroy", fillcolor="rgba(99,102,241,0.15)",
+    hovertemplate="Week of %{x|%b %d, %Y}<br>Attendance: %{y:.1f}%<extra></extra>",
+))
+
+# Rolling average
+fig2.add_trace(go.Scatter(
+    x=att_weekly["week"], y=att_weekly["rolling_mean"],
+    name="4-Week Trend", mode="lines",
+    line=dict(color="#fbbf24", width=2, dash="dash"),
+))
+
+# Dip markers
+if not dip_weeks.empty:
+    fig2.add_trace(go.Scatter(
+        x=dip_weeks["week"], y=dip_weeks["rate"],
+        name="⚠ Dip Detected", mode="markers",
+        marker=dict(size=14, color="#ef4444", symbol="diamond", line=dict(width=2, color="white")),
+        hovertemplate="⚠ DIP: %{x|%b %d}<br>Rate: %{y:.1f}%<extra></extra>",
+    ))
+
+# Month separator annotations
+for m_start in pd.date_range(TERM_START, TERM_END, freq="MS"):
+    fig2.add_vline(x=m_start, line_dash="dot", line_color="rgba(255,255,255,0.15)", line_width=1)
+    fig2.add_annotation(x=m_start + pd.Timedelta(days=15), y=103,
+                        text=m_start.strftime("%b"), showarrow=False,
+                        font=dict(size=11, color="#94a3b8"))
+
+fig2.update_layout(
+    template="plotly_dark", height=380,
+    title=dict(text="Weekly Attendance Rate — Dec 2025 to May 2026", font=dict(size=15)),
+    legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"),
+    margin=dict(l=10, r=10, t=50, b=10), font=dict(size=12),
+    xaxis=dict(tickformat="%b %d", title=""),
+    yaxis=dict(title="Attendance %", range=[0, 110]),
+)
+st.plotly_chart(fig2, use_container_width=True)
 
 # ── Dip analysis callout ──
 if not dip_weeks.empty:
-    # Find the strongest dip
     worst_dip = dip_weeks.loc[dip_weeks["rate"].idxmin()]
     dip_date = worst_dip["week"]
     dip_rate = worst_dip["rate"]
-    dip_month = dip_date.strftime("%B %Y")
 
-    # Check if engagement also dips in the same window
-    concurrent_eng_dip = eng_dip_weeks[
-        (eng_dip_weeks["week"] >= dip_date - pd.Timedelta(weeks=1)) &
-        (eng_dip_weeks["week"] <= dip_date + pd.Timedelta(weeks=1))
-    ]
-
-    col_insight1, col_insight2 = st.columns([2, 1])
-    with col_insight1:
+    col_i1, col_i2 = st.columns([2, 1])
+    with col_i1:
         st.error(f"""
         **🔍 Cohort-Wide Dip Detected — Week of {dip_date.strftime('%b %d, %Y')}**
 
-        Attendance dropped to **{dip_rate:.1f}%** — significantly below the rolling trend.
-        {"Engagement also dipped simultaneously, confirming a cohort-wide disengagement event." if not concurrent_eng_dip.empty else "Engagement remained stable, suggesting the dip is attendance-specific (not a motivation issue)."}
+        Attendance dropped to **{dip_rate:.1f}%** — significantly below the 4-week rolling trend.
+        This indicates a cohort-wide disengagement event during this window.
         """)
-    with col_insight2:
+    with col_i2:
         st.info(f"""
         **🗓 All Dip Weeks ({len(dip_weeks)}):**
 
-        {chr(10).join([f"• {w.strftime('%b %d, %Y')} — {r:.1f}%" for w, r in zip(dip_weeks['week'], dip_weeks['rate'])])}
+        {chr(10).join([f"• {w.strftime('%b %d')} — {r:.1f}%" for w, r in zip(dip_weeks['week'], dip_weeks['rate'])])}
         """)
 
     st.markdown("---")
-
     st.subheader("🧐 What Could Explain the Cohort-Wide Dip?")
 
-    # Determine the month/season for contextual guessing
     dip_month_num = dip_date.month
-    explanations = []
-    if dip_month_num in [1]:
+    if dip_month_num in [12, 1]:
         explanations = [
-            ("🎄 Post-Holiday Re-entry", "The dip falls right after winter/New Year holidays. Students often struggle to re-engage after an extended break."),
-            ("📝 Semester Start Adjustment", "Early-term scheduling confusion or registration delays cause lower attendance in the opening weeks."),
+            ("🎄 Holiday Season / Post-Holiday", "Winter holidays and New Year cause travel and slow re-engagement."),
             ("🤒 Seasonal Illness", "Winter flu season commonly reduces attendance across entire cohorts."),
+            ("📅 Term-Start Lag", "Early weeks of a new term see lower attendance as students settle in."),
+        ]
+    elif dip_month_num in [2]:
+        explanations = [
+            ("📝 Early Assessments", "First assignments/quizzes may cause stress-related absences."),
+            ("😓 Adjustment Period", "Students still adapting to the course pace and workload."),
+            ("🏥 Illness Wave", "Late-winter illness patterns can affect attendance broadly."),
         ]
     elif dip_month_num in [3, 4]:
         explanations = [
-            ("🌙 Ramadan / Religious Holidays", "Fasting month or Eid holidays significantly alter daily routines, reducing both attendance and engagement."),
-            ("📊 Mid-Term Exam Prep", "Students may skip regular sessions to self-study for upcoming midterms."),
+            ("🌙 Ramadan / Religious Holidays", "Fasting month significantly alters daily routines and attendance."),
+            ("📊 Mid-Term Exam Prep", "Students skip sessions to self-study for upcoming midterms."),
             ("🏖 Spring Break", "A scheduled or informal break period where students disengage."),
-        ]
-    elif dip_month_num in [5, 6]:
-        explanations = [
-            ("📝 Final Exam Period", "Students shift focus from class attendance to exam preparation, causing session absences."),
-            ("😓 End-of-Term Fatigue", "Burnout accumulates over 6 months — motivation and attendance naturally decline near the term end."),
-            ("🎓 Early Completion", "Some students may have already met requirements and stop attending."),
-        ]
-    elif dip_month_num in [12]:
-        explanations = [
-            ("🎄 Holiday Season", "December holidays (Christmas/New Year) lead to travel and reduced campus engagement."),
-            ("📅 Term-Start Lag", "If the term begins in December, early weeks see lower attendance as students settle in."),
-            ("🤒 Winter Illness Wave", "Cold/flu season causes absenteeism spikes."),
         ]
     else:
         explanations = [
-            ("📅 Scheduled Break", "The dip aligns with what appears to be a planned institutional break or holiday."),
-            ("🏥 External Event", "A campus or community event (illness wave, infrastructure issue) may have affected the entire cohort."),
-            ("📊 Assessment Window", "Heavy assessment deadlines sometimes cause students to skip sessions to prepare."),
+            ("📝 Final Exam Period", "Students shift focus to exam prep, skipping regular sessions."),
+            ("😓 End-of-Term Fatigue", "6 months of coursework leads to burnout and motivation decline."),
+            ("🎓 Early Completion", "Some students already met requirements and stop attending."),
         ]
 
     cols = st.columns(len(explanations))
     for i, (title, desc) in enumerate(explanations):
         with cols[i]:
             st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #1e1b4b, #312e81); border-radius: 12px; padding: 20px; height: 200px;">
+            <div style="background: linear-gradient(135deg, #1e1b4b, #312e81); border-radius: 12px; padding: 20px; min-height: 160px;">
                 <h4 style="color: #a5b4fc; margin-bottom: 8px;">{title}</h4>
                 <p style="color: #c7d2fe; font-size: 14px; line-height: 1.5;">{desc}</p>
             </div>
             """, unsafe_allow_html=True)
 else:
-    st.success("✅ No significant cohort-wide attendance dips were detected — the cohort maintained consistent participation throughout the term.")
+    st.success("✅ No significant cohort-wide attendance dips detected — participation was consistent throughout the 6-month term.")
 
 st.markdown("")
 
-# ── Heatmap: per-group weekly attendance ──
-st.subheader("Weekly Attendance Heatmap by Group")
+# ── Heatmap: per-group monthly attendance ──
+st.subheader("Monthly Attendance Heatmap by Group")
 
-att_group_week = (
-    att.groupby(["group_id", "week"])
+att_group_month = (
+    att.groupby(["group_id", "month"])
     .apply(lambda g: (g["status"] == "attended").mean() * 100)
     .reset_index(name="rate")
 )
-att_group_week["week_label"] = att_group_week["week"].dt.strftime("%b %d")
+att_group_month["month_label"] = att_group_month["month"].dt.strftime("%b %Y")
 
-pivot = att_group_week.pivot(index="group_id", columns="week_label", values="rate")
-# Sort columns chronologically
-week_order = att_group_week.drop_duplicates("week").sort_values("week")["week_label"].tolist()
-pivot = pivot.reindex(columns=week_order)
+pivot = att_group_month.pivot(index="group_id", columns="month_label", values="rate")
+month_order = att_group_month.drop_duplicates("month").sort_values("month")["month_label"].tolist()
+pivot = pivot.reindex(columns=month_order)
 
 fig_heat = px.imshow(
     pivot.values,
-    labels=dict(x="Week", y="Group", color="Attendance %"),
-    x=pivot.columns.tolist(),
-    y=pivot.index.tolist(),
-    color_continuous_scale="RdYlGn",
-    aspect="auto",
-    title="Attendance Rate by Group × Week (darker red = lower attendance)",
+    labels=dict(x="Month", y="Group", color="Attendance %"),
+    x=pivot.columns.tolist(), y=pivot.index.tolist(),
+    color_continuous_scale="RdYlGn", aspect="auto",
+    title="Attendance Rate by Group × Month (red = low, green = high)",
 )
 fig_heat.update_layout(
-    template="plotly_dark", height=400,
-    margin=dict(l=0, r=0, t=50, b=0), font=dict(size=11),
-    xaxis=dict(tickangle=45),
+    template="plotly_dark", height=350,
+    margin=dict(l=0, r=0, t=50, b=0), font=dict(size=12),
 )
 st.plotly_chart(fig_heat, use_container_width=True)
-st.caption("This heatmap reveals whether dips are isolated to specific groups or affect the entire cohort simultaneously. A vertical red stripe indicates a cohort-wide event.")
+st.caption("A full red column means ALL groups dipped that month (cohort-wide event). Isolated red cells = group-specific issues.")
 
 st.divider()
 
@@ -296,15 +321,11 @@ st.divider()
 st.header("Q2: Score Distribution by Assessment Type")
 st.markdown("_Where is performance most volatile?_")
 
-# Normalize scores to percentage
 grades["score_pct"] = (grades["score"] / grades["max_score"]) * 100
 
-# ── KPI Metrics ──
 type_stats = grades.groupby("type")["score_pct"].agg(["mean", "std", "count"]).reset_index()
 type_stats.columns = ["Type", "Mean", "Std", "Count"]
 type_stats = type_stats.sort_values("Std", ascending=False)
-
-# Compute CoV (Coefficient of Variation) as the volatility measure
 type_stats["CoV"] = (type_stats["Std"] / type_stats["Mean"]) * 100
 
 most_volatile = type_stats.iloc[0]["Type"]
@@ -318,18 +339,12 @@ col_k4.metric("Most Consistent", f"{least_volatile.title()}", f"σ = {type_stats
 
 st.markdown("")
 
-# ── Violin + Box plot ──
 col_v1, col_v2 = st.columns([3, 2])
+
+color_map = {"quiz": "#6366f1", "assignment": "#14b8a6", "practical": "#f59e0b", "exam": "#ef4444"}
 
 with col_v1:
     type_order = type_stats.sort_values("Mean")["Type"].tolist()
-    color_map = {
-        "quiz": "#6366f1",
-        "assignment": "#14b8a6",
-        "practical": "#f59e0b",
-        "exam": "#ef4444",
-    }
-
     fig_violin = px.violin(
         grades, x="type", y="score_pct", color="type",
         box=True, points="outliers",
@@ -378,7 +393,7 @@ with col_v2:
 
 st.markdown("")
 
-# ── Ridgeline / overlapping histograms ──
+# ── Overlapping histograms ──
 st.subheader("Overlapping Score Distributions")
 
 fig_hist = go.Figure()
@@ -386,13 +401,11 @@ for t in ["quiz", "assignment", "practical", "exam"]:
     subset = grades[grades["type"] == t]["score_pct"]
     fig_hist.add_trace(go.Histogram(
         x=subset, name=t.title(), opacity=0.6,
-        marker_color=color_map.get(t, "#888"),
-        nbinsx=30,
+        marker_color=color_map.get(t, "#888"), nbinsx=30,
     ))
 
 fig_hist.update_layout(
-    template="plotly_dark", height=380,
-    barmode="overlay",
+    template="plotly_dark", height=380, barmode="overlay",
     title="Overlapping Score Distributions by Assessment Type",
     xaxis_title="Score %", yaxis_title="Count",
     legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center"),
@@ -403,14 +416,13 @@ st.plotly_chart(fig_hist, use_container_width=True)
 # ── Score trend over time by type ──
 st.subheader("Average Score Trend Over Time by Assessment Type")
 
-grades["month"] = grades["date"].dt.to_period("M").apply(lambda r: r.start_time)
-monthly_type = grades.groupby(["month", "type"])["score_pct"].agg(["mean", "std"]).reset_index()
+grades["g_month"] = grades["date"].dt.to_period("M").apply(lambda r: r.start_time)
+monthly_type = grades.groupby(["g_month", "type"])["score_pct"].agg(["mean", "std"]).reset_index()
 monthly_type.columns = ["month", "type", "mean_score", "std_score"]
 
 fig_trend = px.line(
     monthly_type, x="month", y="mean_score", color="type",
-    color_discrete_map=color_map,
-    markers=True,
+    color_discrete_map=color_map, markers=True,
     title="Monthly Average Score by Assessment Type",
     labels={"month": "Month", "mean_score": "Avg Score %", "type": "Type"},
 )
@@ -436,10 +448,10 @@ col_t1, col_t2 = st.columns(2)
 with col_t1:
     st.markdown("""
     <div style="background: linear-gradient(135deg, #064e3b, #065f46); border-radius: 12px; padding: 20px;">
-        <h4 style="color: #34d399; margin-bottom: 10px;">📅 Temporal Trends</h4>
+        <h4 style="color: #34d399; margin-bottom: 10px;">📅 Temporal Trends (Dec 2025 → May 2026)</h4>
         <ul style="color: #a7f3d0; font-size: 14px; line-height: 1.8;">
             <li>Attendance & engagement generally track together over the 6-month term</li>
-            <li>Dip weeks (if any) often align with holidays, exam seasons, or Ramadan</li>
+            <li>Dip weeks often align with holidays, exam seasons, or Ramadan</li>
             <li>The heatmap reveals whether dips are group-specific or cohort-wide</li>
             <li>Proactive outreach during identified dip windows can mitigate dropout risk</li>
         </ul>
@@ -461,9 +473,4 @@ with col_t2:
 
 st.markdown("")
 
-# ── Save UI ──
-render_save_ui(
-    "temporal_assessment",
-    "Temporal & Assessment data",
-    dataframe_to_dict(type_stats),
-)
+render_save_ui("temporal_assessment", "Temporal & Assessment data", dataframe_to_dict(type_stats))
