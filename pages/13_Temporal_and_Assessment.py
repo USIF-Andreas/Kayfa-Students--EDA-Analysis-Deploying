@@ -40,28 +40,20 @@ att = att_raw[(att_raw["session_datetime"] >= TERM_START) & (att_raw["session_da
 eng = eng_raw[(eng_raw["event_datetime"] >= TERM_START) & (eng_raw["event_datetime"] <= TERM_END)].copy()
 
 # ═══════════════════════════════════════════════════
-# SECTION 1 — Attendance & Engagement
+# SECTION 1 — Engagement & Attendance Over the Term
 # ═══════════════════════════════════════════════════
 
 st.title("📉 Temporal Trends & Assessment Analysis")
 st.markdown(f"##### Tracking participation and scores across the {TERM_LABEL} term")
 st.divider()
 
-st.header("Q1: Attendance & Engagement Over the 6-Month Term")
+st.header("Q9: Engagement & Attendance Over the 6-Month Term")
 st.markdown(f"_{TERM_LABEL} · Is there a window where the whole cohort dips at once?_")
 
-# ── Monthly aggregation ──
-att["month"] = att["session_datetime"].dt.to_period("M").apply(lambda r: r.start_time)
-att["is_attended"] = (att["status"] == "attended").astype(int)
-att_monthly = att.groupby("month").agg(
-    attended=("is_attended", "sum"),
-    total=("is_attended", "count"),
-    rate=("is_attended", "mean"),
-    unique_students=("student_id", "nunique"),
-).reset_index().sort_values("month")
-att_monthly["rate"] = att_monthly["rate"] * 100
-att_monthly["month_label"] = att_monthly["month"].dt.strftime("%b %Y")
+# ── NOTE: Attendance data only covers December 2025 ──
+# ── Engagement data covers all 6 months — used as primary participation metric ──
 
+# ── Monthly engagement aggregation (full 6 months) ──
 eng["month"] = eng["event_datetime"].dt.to_period("M").apply(lambda r: r.start_time)
 eng_monthly = (
     eng.groupby("month")
@@ -71,161 +63,166 @@ eng_monthly = (
 eng_monthly["events_per_student"] = eng_monthly["total_events"] / eng_monthly["unique_students"]
 eng_monthly["month_label"] = eng_monthly["month"].dt.strftime("%b %Y")
 
-# Weekly for detail chart
-att["week"] = att["session_datetime"].dt.to_period("W").apply(lambda r: r.start_time)
-att_weekly = att.groupby("week").agg(
-    rate=("is_attended", "mean"),
-    unique_students=("student_id", "nunique"),
-).reset_index().sort_values("week")
-att_weekly["rate"] = att_weekly["rate"] * 100
-att_weekly["rolling_mean"] = att_weekly["rate"].rolling(4, min_periods=2, center=True).mean()
-att_weekly["rolling_std"] = att_weekly["rate"].rolling(4, min_periods=2, center=True).std()
-att_weekly["is_dip"] = att_weekly["rate"] < (att_weekly["rolling_mean"] - att_weekly["rolling_std"])
-dip_weeks = att_weekly[att_weekly["is_dip"]]
+# ── Weekly engagement for detail chart ──
+eng["week"] = eng["event_datetime"].dt.to_period("W").apply(lambda r: r.start_time)
+eng_weekly = (
+    eng.groupby("week")
+    .agg(total_events=("event_id", "count"), unique_students=("student_id", "nunique"))
+    .reset_index().sort_values("week")
+)
+eng_weekly["events_per_student"] = eng_weekly["total_events"] / eng_weekly["unique_students"]
+eng_weekly["rolling_mean"] = eng_weekly["events_per_student"].rolling(4, min_periods=2, center=True).mean()
+eng_weekly["rolling_std"] = eng_weekly["events_per_student"].rolling(4, min_periods=2, center=True).std()
+eng_weekly["is_dip"] = eng_weekly["events_per_student"] < (eng_weekly["rolling_mean"] - eng_weekly["rolling_std"])
+dip_weeks = eng_weekly[eng_weekly["is_dip"]]
+
+# ── Attendance (December only) ──
+att["month"] = att["session_datetime"].dt.to_period("M").apply(lambda r: r.start_time)
+att["is_attended"] = (att["status"] == "attended").astype(int)
+overall_att_rate = (att["status"] == "attended").mean() * 100 if len(att) > 0 else 0
+
+# ── Detect weakest engagement month ──
+weakest_eng = eng_monthly.loc[eng_monthly["events_per_student"].idxmin()]
+avg_eng = eng_monthly["events_per_student"].mean()
 
 # KPIs
-overall_att_rate = (att["status"] == "attended").mean() * 100 if len(att) > 0 else 0
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-col_m1.metric("Term Attendance Rate", f"{overall_att_rate:.1f}%")
+col_m1.metric("Dec Attendance Rate", f"{overall_att_rate:.1f}%")
 col_m2.metric("Total Events (6 mo)", f"{len(eng):,}")
-col_m3.metric("Weeks With Dips", f"{len(dip_weeks)}")
-if len(att_monthly) > 0:
-    lowest_month = att_monthly.loc[att_monthly["rate"].idxmin()]
-    col_m4.metric("Weakest Month", lowest_month["month_label"], f"{lowest_month['rate']:.1f}%")
+col_m3.metric("Engagement Dip Weeks", f"{len(dip_weeks)}")
+col_m4.metric("Weakest Month", weakest_eng["month_label"], f"{weakest_eng['events_per_student']:.1f} events/student")
 
 st.markdown("")
 
-# ── CHART 1: Monthly attendance bars + engagement line ──
-st.subheader("📊 Monthly Attendance & Engagement")
+# ── CHART 1: Monthly engagement bars (all 6 months) ──
+st.subheader("📊 Monthly Engagement — Events per Student")
+st.markdown("_How active were students each month? (logins, video watches, quiz attempts, forum posts, downloads)_")
 
-if len(att_monthly) > 0:
-    fig1 = make_subplots(specs=[[{"secondary_y": True}]])
-    avg_rate = att_monthly["rate"].mean()
-    bar_colors = ["#10b981" if r >= avg_rate else "#ef4444" for r in att_monthly["rate"]]
+bar_colors = ["#10b981" if v >= avg_eng else "#ef4444" for v in eng_monthly["events_per_student"]]
 
-    fig1.add_trace(go.Bar(
-        x=att_monthly["month_label"], y=att_monthly["rate"],
-        name="Attendance %", marker_color=bar_colors,
-        text=[f"{r:.1f}%" for r in att_monthly["rate"]],
-        textposition="outside", textfont=dict(size=13, color="white"), opacity=0.85,
-    ), secondary_y=False)
+fig1 = go.Figure()
+fig1.add_trace(go.Bar(
+    x=eng_monthly["month_label"], y=eng_monthly["events_per_student"],
+    marker_color=bar_colors,
+    text=[f"{v:.1f}" for v in eng_monthly["events_per_student"]],
+    textposition="outside", textfont=dict(size=14, color="white"),
+    hovertemplate="%{x}<br>Events/Student: %{y:.1f}<br>Total Events: %{customdata[0]:,}<br>Active Students: %{customdata[1]}<extra></extra>",
+    customdata=list(zip(eng_monthly["total_events"], eng_monthly["unique_students"])),
+))
 
-    fig1.add_hline(y=avg_rate, line_dash="dot", line_color="#fbbf24", line_width=2,
-                   annotation_text=f"Avg: {avg_rate:.1f}%", annotation_position="top left",
-                   annotation_font_color="#fbbf24", secondary_y=False)
+fig1.add_hline(y=avg_eng, line_dash="dot", line_color="#fbbf24", line_width=2,
+               annotation_text=f"Avg: {avg_eng:.1f}", annotation_position="top left",
+               annotation_font_color="#fbbf24")
 
-    if len(eng_monthly) > 0:
-        fig1.add_trace(go.Scatter(
-            x=eng_monthly["month_label"], y=eng_monthly["events_per_student"],
-            name="Engagement / Student", mode="lines+markers+text",
-            line=dict(color="#6366f1", width=3),
-            marker=dict(size=10, color="#6366f1", line=dict(width=2, color="white")),
-            text=[f"{v:.1f}" for v in eng_monthly["events_per_student"]],
-            textposition="top center", textfont=dict(size=11, color="#a5b4fc"),
-        ), secondary_y=True)
-
-    fig1.update_layout(
-        template="plotly_dark", height=420,
-        title=dict(text=f"Attendance vs Engagement — Month by Month ({TERM_LABEL})", font=dict(size=16)),
-        legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"),
-        margin=dict(l=10, r=10, t=60, b=10), font=dict(size=12), bargap=0.35,
-    )
-    fig1.update_yaxes(title_text="Attendance %", range=[0, 110], secondary_y=False)
-    fig1.update_yaxes(title_text="Events per Student", secondary_y=True)
-    st.plotly_chart(fig1, use_container_width=True)
-    st.caption("🟢 Green = above average · 🔴 Red = below average · 🟣 Purple line = engagement per student")
-
-    # ── Per-month attendance breakdown cards ──
-    st.markdown("")
-    st.subheader("📅 Attendance Breakdown — Each Month")
-
-    month_cols = st.columns(min(len(att_monthly), 6))
-    for i, (_, row) in enumerate(att_monthly.iterrows()):
-        col_idx = i % len(month_cols)
-        rate = row["rate"]
-        attended = int(row["attended"])
-        total = int(row["total"])
-        students = int(row["unique_students"])
-        if rate >= 80:
-            bg = "linear-gradient(135deg, #064e3b, #065f46)"
-            emoji = "✅"
-        elif rate >= 60:
-            bg = "linear-gradient(135deg, #78350f, #92400e)"
-            emoji = "⚠️"
-        else:
-            bg = "linear-gradient(135deg, #7f1d1d, #991b1b)"
-            emoji = "🔴"
-
-        with month_cols[col_idx]:
-            st.markdown(f"""
-            <div style="background: {bg}; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 8px;">
-                <h3 style="color: white; margin: 0;">{row['month_label']}</h3>
-                <p style="font-size: 32px; font-weight: 800; color: white; margin: 8px 0;">{emoji} {rate:.0f}%</p>
-                <p style="color: #d1d5db; font-size: 13px; margin: 0;">{attended} of {total} sessions attended</p>
-                <p style="color: #9ca3af; font-size: 12px; margin: 2px 0;">{students} active students</p>
-            </div>
-            """, unsafe_allow_html=True)
+fig1.update_layout(
+    template="plotly_dark", height=420,
+    title=dict(text=f"Engagement per Student — Month by Month ({TERM_LABEL})", font=dict(size=16)),
+    margin=dict(l=10, r=10, t=60, b=10), font=dict(size=12), bargap=0.3,
+    yaxis=dict(title="Events per Student"),
+    xaxis=dict(title=""),
+)
+st.plotly_chart(fig1, use_container_width=True)
+st.caption("🟢 Green = above average engagement · 🔴 Red = below average · Hover for details")
 
 st.markdown("")
 
-# ── CHART 2: Weekly detail ──
-st.subheader("📈 Weekly Attendance Detail")
+# ── Per-month engagement breakdown cards ──
+st.subheader("📅 Engagement Breakdown — Each Month")
 
-if len(att_weekly) > 0:
-    fig2 = go.Figure()
+month_cols = st.columns(min(len(eng_monthly), 6))
+for i, (_, row) in enumerate(eng_monthly.iterrows()):
+    col_idx = i % len(month_cols)
+    eps = row["events_per_student"]
+    total = int(row["total_events"])
+    students = int(row["unique_students"])
+
+    if eps >= avg_eng * 1.1:
+        bg = "linear-gradient(135deg, #064e3b, #065f46)"
+        emoji = "🔥"
+        label = "High"
+    elif eps >= avg_eng * 0.9:
+        bg = "linear-gradient(135deg, #1e3a5f, #1e40af)"
+        emoji = "✅"
+        label = "Normal"
+    else:
+        bg = "linear-gradient(135deg, #7f1d1d, #991b1b)"
+        emoji = "⚠️"
+        label = "Low"
+
+    with month_cols[col_idx]:
+        st.markdown(f"""
+        <div style="background: {bg}; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 8px;">
+            <h3 style="color: white; margin: 0;">{row['month_label']}</h3>
+            <p style="font-size: 28px; font-weight: 800; color: white; margin: 8px 0;">{emoji} {eps:.1f}</p>
+            <p style="color: #d1d5db; font-size: 12px; margin: 0;">events per student</p>
+            <hr style="border-color: rgba(255,255,255,0.15); margin: 8px 0;">
+            <p style="color: #d1d5db; font-size: 13px; margin: 2px 0;">{total:,} total events</p>
+            <p style="color: #9ca3af; font-size: 12px; margin: 2px 0;">{students} active students</p>
+            <p style="color: #fbbf24; font-size: 12px; font-weight: 600; margin: 4px 0;">{label}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+st.markdown("")
+
+# ── CHART 2: Weekly engagement detail ──
+st.subheader("📈 Weekly Engagement Detail (with Dip Detection)")
+
+fig2 = go.Figure()
+fig2.add_trace(go.Scatter(
+    x=eng_weekly["week"], y=eng_weekly["events_per_student"],
+    name="Weekly Engagement", mode="lines",
+    line=dict(color="#6366f1", width=2),
+    fill="tozeroy", fillcolor="rgba(99,102,241,0.15)",
+    hovertemplate="Week of %{x|%b %d, %Y}<br>Events/Student: %{y:.1f}<extra></extra>",
+))
+fig2.add_trace(go.Scatter(
+    x=eng_weekly["week"], y=eng_weekly["rolling_mean"],
+    name="4-Week Trend", mode="lines",
+    line=dict(color="#fbbf24", width=2, dash="dash"),
+))
+if not dip_weeks.empty:
     fig2.add_trace(go.Scatter(
-        x=att_weekly["week"], y=att_weekly["rate"],
-        name="Weekly Attendance %", mode="lines",
-        line=dict(color="#6366f1", width=2),
-        fill="tozeroy", fillcolor="rgba(99,102,241,0.15)",
-        hovertemplate="Week of %{x|%b %d, %Y}<br>Attendance: %{y:.1f}%<extra></extra>",
+        x=dip_weeks["week"], y=dip_weeks["events_per_student"],
+        name="⚠ Dip Detected", mode="markers",
+        marker=dict(size=14, color="#ef4444", symbol="diamond", line=dict(width=2, color="white")),
+        hovertemplate="⚠ DIP: %{x|%b %d}<br>Events/Student: %{y:.1f}<extra></extra>",
     ))
-    fig2.add_trace(go.Scatter(
-        x=att_weekly["week"], y=att_weekly["rolling_mean"],
-        name="4-Week Trend", mode="lines",
-        line=dict(color="#fbbf24", width=2, dash="dash"),
-    ))
-    if not dip_weeks.empty:
-        fig2.add_trace(go.Scatter(
-            x=dip_weeks["week"], y=dip_weeks["rate"],
-            name="⚠ Dip Detected", mode="markers",
-            marker=dict(size=14, color="#ef4444", symbol="diamond", line=dict(width=2, color="white")),
-        ))
 
-    for m_start in pd.date_range(TERM_START, TERM_END, freq="MS"):
-        fig2.add_vline(x=m_start, line_dash="dot", line_color="rgba(255,255,255,0.15)")
-        fig2.add_annotation(x=m_start + pd.Timedelta(days=15), y=103,
-                            text=m_start.strftime("%b"), showarrow=False,
-                            font=dict(size=11, color="#94a3b8"))
+for m_start in pd.date_range(TERM_START, TERM_END, freq="MS"):
+    fig2.add_vline(x=m_start, line_dash="dot", line_color="rgba(255,255,255,0.15)")
+    fig2.add_annotation(x=m_start + pd.Timedelta(days=15), y=eng_weekly["events_per_student"].max() * 1.05,
+                        text=m_start.strftime("%b"), showarrow=False,
+                        font=dict(size=11, color="#94a3b8"))
 
-    fig2.update_layout(
-        template="plotly_dark", height=380,
-        title=dict(text=f"Weekly Attendance — {TERM_LABEL}", font=dict(size=15)),
-        legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"),
-        margin=dict(l=10, r=10, t=50, b=10),
-        xaxis=dict(tickformat="%b %d", title=""), yaxis=dict(title="Attendance %", range=[0, 110]),
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+fig2.update_layout(
+    template="plotly_dark", height=380,
+    title=dict(text=f"Weekly Engagement — {TERM_LABEL}", font=dict(size=15)),
+    legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"),
+    margin=dict(l=10, r=10, t=50, b=10),
+    xaxis=dict(tickformat="%b %d", title=""),
+    yaxis=dict(title="Events per Student"),
+)
+st.plotly_chart(fig2, use_container_width=True)
 
 # ── Dip callout ──
 if not dip_weeks.empty:
-    worst = dip_weeks.loc[dip_weeks["rate"].idxmin()]
+    worst = dip_weeks.loc[dip_weeks["events_per_student"].idxmin()]
     st.error(f"""
     **🔍 Cohort-Wide Dip — Week of {worst['week'].strftime('%b %d, %Y')}**
     
-    Attendance dropped to **{worst['rate']:.1f}%**, well below the trend.
+    Engagement dropped to **{worst['events_per_student']:.1f} events/student**, well below the trend.
     """)
 
     st.subheader("🧐 What Could Explain It?")
     m = worst["week"].month
-    if m in [1, 2]:
-        exps = [("🎄 Post-Holiday Lag", "Students slow to return after winter break."),
-                ("🤒 Winter Illness", "Flu season hits attendance hard."),
-                ("📝 Early Assessments", "First quizzes cause stress-based absences.")]
+    if m in [12, 1, 2]:
+        exps = [("🎄 Holiday Season", "Winter holidays and New Year reduce student activity."),
+                ("🤒 Winter Illness", "Flu season hits engagement across the board."),
+                ("📝 Early Assessments", "First quizzes cause stress and less platform use.")]
     elif m in [3, 4]:
-        exps = [("🌙 Ramadan", "Fasting alters routines, reducing attendance."),
-                ("📊 Midterm Prep", "Students skip class to study for exams."),
-                ("🏖 Spring Break", "Scheduled break lowers participation.")]
+        exps = [("🌙 Ramadan", "Fasting alters daily routines, reducing online activity."),
+                ("📊 Midterm Prep", "Students focus on studying rather than platform activities."),
+                ("🏖 Spring Break", "Scheduled break lowers participation across the board.")]
     else:
         exps = [("📝 Finals Period", "Students shift focus to exam prep."),
                 ("😓 End-of-Term Fatigue", "6 months of work causes burnout."),
@@ -241,30 +238,39 @@ if not dip_weeks.empty:
             </div>
             """, unsafe_allow_html=True)
 else:
-    st.success("✅ No significant dips detected — consistent participation throughout the term.")
+    st.success("✅ No significant dips detected — consistent engagement throughout the term.")
 
 st.markdown("")
 
-# ── Heatmap ──
-st.subheader("Monthly Attendance Heatmap by Group")
-att_gm = att.groupby(["group_id", "month"]).agg(
-    rate=("is_attended", "mean"),
+# ── Engagement heatmap by group ──
+st.subheader("Monthly Engagement Heatmap by Group")
+st.markdown("_Which groups were most/least active each month?_")
+
+eng_with_group = eng.merge(
+    att_raw[["student_id", "group_id"]].drop_duplicates(),
+    on="student_id", how="left"
+)
+eng_with_group = eng_with_group.dropna(subset=["group_id"])
+eng_gm = eng_with_group.groupby(["group_id", "month"]).agg(
+    total_events=("event_id", "count"),
+    unique_students=("student_id", "nunique"),
 ).reset_index()
-att_gm["rate"] = att_gm["rate"] * 100
-att_gm["month_label"] = att_gm["month"].dt.strftime("%b %Y")
-pivot = att_gm.pivot(index="group_id", columns="month_label", values="rate")
-mo = att_gm.drop_duplicates("month").sort_values("month")["month_label"].tolist()
+eng_gm["events_per_student"] = eng_gm["total_events"] / eng_gm["unique_students"]
+eng_gm["month_label"] = eng_gm["month"].dt.strftime("%b %Y")
+
+pivot = eng_gm.pivot(index="group_id", columns="month_label", values="events_per_student")
+mo = eng_gm.drop_duplicates("month").sort_values("month")["month_label"].tolist()
 pivot = pivot.reindex(columns=mo)
 
 fig_heat = px.imshow(
-    pivot.values, labels=dict(x="Month", y="Group", color="Attendance %"),
+    pivot.values, labels=dict(x="Month", y="Group", color="Events/Student"),
     x=pivot.columns.tolist(), y=pivot.index.tolist(),
     color_continuous_scale="RdYlGn", aspect="auto",
-    title="Attendance by Group × Month (red = low, green = high)",
+    title="Engagement per Student by Group × Month (red = low, green = high)",
 )
 fig_heat.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=50, b=0))
 st.plotly_chart(fig_heat, use_container_width=True)
-st.caption("A full red column = ALL groups dipped that month. Isolated red cells = group-specific issues.")
+st.caption("A full red column = ALL groups disengaged that month (cohort-wide event). Isolated red cells = group-specific issues.")
 
 st.divider()
 
