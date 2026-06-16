@@ -147,16 +147,9 @@ for i in range(0, len(top6), cols_per_row):
 
 st.markdown("")
 with st.expander("🔍 View Full At-Risk List (Scrollable)"):
-    display_df = risk[["full_name", "group_id", "risk_score", "attendance_rate_pct", "avg_concept_score", "concepts_failed"]].copy()
-    display_df["attendance_rate_pct"] = display_df["attendance_rate_pct"].round(0).astype(str) + "%"
-    display_df["avg_concept_score"] = display_df["avg_concept_score"].round(1).astype(str) + "%"
-    display_df["risk_score"] = display_df["risk_score"].round(1)
-    
-    st.dataframe(
-        display_df.head(50),
-        use_container_width=True,
-        hide_index=True
-    )
+    with st.container(height=350):
+        for i, (_, r) in enumerate(risk.iloc[6:50].iterrows()):
+            st.warning(f"**#{i+7} {r['full_name']}** (Group {r['group_id']}) — **Risk: {r['risk_score']:.1f}** | Att: {r['attendance_rate_pct']:.0f}% | Score: {r['avg_concept_score']:.1f}% | Fails: {int(r['concepts_failed'])}")
 
 st.divider()
 
@@ -166,13 +159,13 @@ st.markdown("""
 | Question | Finding |
 |---|---|
 | **Q10 — Age Bands** | Best-performing age band: **{best_band}** |
-| **Q14 — At-Risk Top 10** | **#{worst_name}** (risk={worst_risk:.1f}): {worst_att}% att, {worst_grade}% grade, {worst_fail} failures |
+| **Q14 — At-Risk Top** | **#{worst_name}** (risk={worst_risk:.1f}): {worst_att:.0f}% att, {worst_grade:.1f}% grade, {worst_fail} failures |
 """.format(best_band=best_age['Age Band'],
-           worst_name=top10.iloc[0]['full_name'],
-           worst_risk=top10.iloc[0]['risk_score'],
-           worst_att=top10.iloc[0]['attendance_rate_pct'],
-           worst_grade=top10.iloc[0]['avg_concept_score'],
-           worst_fail=int(top10.iloc[0]['concepts_failed'])))
+           worst_name=top6.iloc[0]['full_name'],
+           worst_risk=top6.iloc[0]['risk_score'],
+           worst_att=top6.iloc[0]['attendance_rate_pct'],
+           worst_grade=top6.iloc[0]['avg_concept_score'],
+           worst_fail=int(top6.iloc[0]['concepts_failed'])))
 
 render_save_ui("student_profiling", "Student profiling data",
                dataframe_to_dict(risk.head(10)))
