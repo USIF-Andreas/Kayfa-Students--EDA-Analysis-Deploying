@@ -15,24 +15,24 @@ st.title("🎯 Strategic Insights & Recommendations")
 st.markdown("##### Data-Driven Answers to Kayfa's Key Questions")
 
 insights = [
-    ("🎓", "High Attendance Drives Success",
-     "Students with attendance >80% score **12.4 pts higher** on average than those below 50%. "
-     "Attendance is the #1 predictor of academic performance in this dataset."),
-    ("📉", "Procrastination Hurts Grades",
-     "Students with higher late rates have **lower avg concept scores**. "
-     "The `late_rate` feature is a strong early-warning signal."),
-    ("⚡", "Engagement Correlates with Performance",
-     "Students in the top engagement quartile score significantly higher than the bottom quartile. "
-     "Total events and video watch time are strong performance predictors."),
-    ("🏙️", "Geographic Performance Gaps Exist",
-     "Cairo and Alexandria students outperform other cities by **5-8 pts**. "
-     "Fayoum and Asyut may need additional instructional support."),
-    ("📚", "Concept Fail Rates Vary by Instructor",
-     "The best instructor achieves a significantly lower fail rate vs the lowest. "
-     "Peer mentoring between instructors is recommended."),
-    ("📱", "Time Management Matters",
-     "Students who spend more time on assignments don't always score higher — "
-     "quality of study time matters more than quantity."),
+    ("👥", "Behavioral Personas Drive Strategy",
+     "The student base falls into 4 clear personas (High Achievers, Hard Workers, Natural Talents, At-Risk). "
+     "One-size-fits-all communication is inefficient; we must target support based on the persona."),
+    ("🎓", "Attendance is the Ultimate Predictor",
+     "Platform engagement and session attendance are the most powerful leading indicators of academic success. "
+     "Students simply cannot succeed if they do not show up."),
+    ("📉", "The Hidden Cost of Being Late",
+     "Procrastination directly hurts performance. Students with higher late submission rates consistently "
+     "score lower on concept assessments, making 'late rate' our best early-warning signal."),
+    ("🗓️", "Temporal Engagement Dips",
+     "Engagement naturally dips cohort-wide during specific periods (like post-exams or holidays). "
+     "We must anticipate these drops and proactively reach out to prevent dropouts."),
+    ("🏙️", "Geographic Performance Gaps",
+     "Cairo and Alexandria students consistently outperform other cities. "
+     "Students in Fayoum and Asyut may need localized support or offline materials."),
+    ("📚", "Instructor Impact is Measurable",
+     "Concept fail rates vary wildly depending on the instructor. "
+     "Peer mentoring between the highest and lowest performing instructors is highly recommended."),
 ]
 
 cols = st.columns(3)
@@ -40,6 +40,39 @@ for i, (emoji, title, desc) in enumerate(insights):
     with cols[i % 3]:
         st.markdown(f"### {emoji} {title}")
         st.caption(desc)
+
+st.divider()
+
+st.header("🔄 Controllable vs. Uncontrollable Success Factors")
+st.markdown("##### Where should we focus our interventions?")
+
+col_change, col_unchange = st.columns(2)
+
+with col_change:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #064e3b, #065f46); border-radius: 12px; padding: 20px; height: 100%;">
+        <h4 style="color: #34d399; margin-top: 0;">✅ Changeable (Actionable) Factors</h4>
+        <p style="color: #a7f3d0; font-size: 14px;">These are behavioral metrics we can actively influence through platform design, nudges, and interventions.</p>
+        <ul style="color: white; font-size: 15px; line-height: 1.6;">
+            <li><b>Attendance:</b> The #1 predictor of success. We can send automated reminders to the "Hard Workers" or "At-Risk" personas.</li>
+            <li><b>Late Submissions:</b> High late rates guarantee lower grades. We can enforce hard deadlines, send SMS reminders, or offer early-bird submission bonuses.</li>
+            <li><b>Platform Engagement:</b> Active days correlate with higher scores. We can build gamification, streaks, or daily challenges to boost logins.</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_unchange:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #7f1d1d, #991b1b); border-radius: 12px; padding: 20px; height: 100%;">
+        <h4 style="color: #fca5a5; margin-top: 0;">🛑 Unchangeable (Contextual) Factors</h4>
+        <p style="color: #fecaca; font-size: 14px;">These are demographic factors we cannot change, but must adapt our curriculum and teaching style to accommodate.</p>
+        <ul style="color: white; font-size: 15px; line-height: 1.6;">
+            <li><b>Age Band:</b> Younger and older students have wildly different digital literacy and time constraints. We must provide flexible pacing.</li>
+            <li><b>City / Geography:</b> Students in Fayoum and Asyut face different infrastructure challenges (e.g., internet speed) than Cairo. We must ensure offline/low-bandwidth support.</li>
+            <li><b>Baseline Knowledge:</b> Students arrive with varying levels of preparation. Identifying "Natural Talents" vs those needing foundations early is critical.</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.divider()
 
