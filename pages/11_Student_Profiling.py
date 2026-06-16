@@ -33,85 +33,38 @@ age_analysis = master.groupby("age_band", observed=True).agg(
 ).reset_index()
 age_analysis.columns = ["Age Band", "Avg Grade %", "Avg Attendance %", "Avg Fail Rate %", "Count"]
 
+best_age = age_analysis.loc[age_analysis["Avg Grade %"].idxmax()]
+
 col1, col2 = st.columns(2)
 
 with col1:
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=age_analysis["Age Band"], y=age_analysis["Avg Grade %"],
-        marker_color=["#6366f1", "#6366f1", "#10b981", "#f59e0b", "#ef4444"],
-        text=age_analysis["Avg Grade %"].round(1).astype(str) + "%",
-        textposition="outside",
-    ))
-    fig.update_layout(
-        template="plotly_dark", height=350,
-        title="Average Grade by Age Band",
-        xaxis_title="Age Band", yaxis_title="Avg Grade %",
-        margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11),
+    fig1 = px.bar(
+        age_analysis, x="Age Band", y=["Avg Grade %", "Avg Attendance %"], barmode="group",
+        title="Grade & Attendance by Age Band",
+        labels={"value": "Percentage (%)", "variable": "Metric"},
+        color_discrete_sequence=["#6366f1", "#10b981"]
     )
-    st.plotly_chart(fig, use_container_width=True)
+    fig1.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11), legend=dict(orientation="h", y=-0.2))
+    st.plotly_chart(fig1, use_container_width=True)
 
 with col2:
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=age_analysis["Age Band"], y=age_analysis["Avg Attendance %"],
-        marker_color=["#10b981", "#10b981", "#10b981", "#f59e0b", "#ef4444"],
-        text=age_analysis["Avg Attendance %"].round(1).astype(str) + "%",
-        textposition="outside",
-    ))
-    fig.update_layout(
-        template="plotly_dark", height=350,
-        title="Average Attendance by Age Band",
-        xaxis_title="Age Band", yaxis_title="Avg Attendance %",
-        margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-col3, col4 = st.columns(2)
-
-with col3:
-    fig = px.pie(
+    fig2 = px.pie(
         age_analysis, values="Count", names="Age Band", hole=0.4,
         color_discrete_sequence=px.colors.qualitative.Set2,
-        title="Student Distribution by Age Band",
+        title="Student Population by Age Band",
     )
-    fig.update_layout(template="plotly_dark", height=350,
-                      margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
+    fig2.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
+    st.plotly_chart(fig2, use_container_width=True)
 
-with col4:
-    eng_age = master.groupby("age_band", observed=True).agg(
-        avg_events=("total_events", "mean"),
-        avg_video_hrs=("total_video_seconds", "mean"),
-    ).reset_index()
-    eng_age["avg_video_hrs"] = (eng_age["avg_video_hrs"] / 3600).round(1)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=eng_age["age_band"], y=eng_age["avg_events"], mode="lines+markers",
-        name="Avg Events", line=dict(color="#6366f1", width=3), marker=dict(size=10),
-    ))
-    fig.add_trace(go.Scatter(
-        x=eng_age["age_band"], y=eng_age["avg_video_hrs"], mode="lines+markers",
-        name="Avg Video Hrs", line=dict(color="#14b8a6", width=3), marker=dict(size=10),
-        yaxis="y2",
-    ))
-    fig.update_layout(
-        template="plotly_dark", height=350,
-        title="Engagement by Age Band",
-        xaxis_title="Age Band",
-        yaxis=dict(title="Avg Events"),
-        yaxis2=dict(title="Avg Video Hours", overlaying="y", side="right"),
-        margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11),
-        legend=dict(orientation="h", y=1.1),
-    )
-    st.plotly_chart(fig, use_container_width=True)
+st.markdown("")
+st.subheader("💡 Professional Insights")
+st.info(f"""
+**Age & Performance Trend:**  
+The data shows that the **{best_age['Age Band']}** age band performs the best across the board, with the highest average grades ({best_age['Avg Grade %']:.1f}%) and attendance rates ({best_age['Avg Attendance %']:.1f}%). 
 
-best_age = age_analysis.loc[age_analysis["Avg Grade %"].idxmax()]
-st.info(
-    f"**Best-performing age band: {best_age['Age Band']}** "
-    f"(Grade: {best_age['Avg Grade %']:.1f}%, Attendance: {best_age['Avg Attendance %']:.1f}%, "
-    f"Fail Rate: {best_age['Avg Fail Rate %']:.1f}%)"
-)
+**Recommendation:**  
+Younger or older age groups often face different challenges, such as work commitments or adapting to the learning platform. Consider offering flexible learning paths or mentorship programs specifically targeted at the age bands that are falling behind.
+""")
 
 st.divider()
 
