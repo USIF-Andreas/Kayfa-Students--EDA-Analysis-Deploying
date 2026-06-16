@@ -52,16 +52,14 @@ st.markdown(f"_{TERM_LABEL} · Is there a window where the whole cohort dips at 
 
 # ── Monthly aggregation ──
 att["month"] = att["session_datetime"].dt.to_period("M").apply(lambda r: r.start_time)
-att_monthly = (
-    att.groupby("month")
-    .apply(lambda g: pd.Series({
-        "attended": (g["status"] == "attended").sum(),
-        "total": len(g),
-        "rate": (g["status"] == "attended").mean() * 100,
-        "unique_students": g["student_id"].nunique(),
-    }))
-    .reset_index().sort_values("month")
-)
+att["is_attended"] = (att["status"] == "attended").astype(int)
+att_monthly = att.groupby("month").agg(
+    attended=("is_attended", "sum"),
+    total=("is_attended", "count"),
+    rate=("is_attended", "mean"),
+    unique_students=("student_id", "nunique"),
+).reset_index().sort_values("month")
+att_monthly["rate"] = att_monthly["rate"] * 100
 att_monthly["month_label"] = att_monthly["month"].dt.strftime("%b %Y")
 
 eng["month"] = eng["event_datetime"].dt.to_period("M").apply(lambda r: r.start_time)
@@ -75,14 +73,11 @@ eng_monthly["month_label"] = eng_monthly["month"].dt.strftime("%b %Y")
 
 # Weekly for detail chart
 att["week"] = att["session_datetime"].dt.to_period("W").apply(lambda r: r.start_time)
-att_weekly = (
-    att.groupby("week")
-    .apply(lambda g: pd.Series({
-        "rate": (g["status"] == "attended").mean() * 100,
-        "unique_students": g["student_id"].nunique(),
-    }))
-    .reset_index().sort_values("week")
-)
+att_weekly = att.groupby("week").agg(
+    rate=("is_attended", "mean"),
+    unique_students=("student_id", "nunique"),
+).reset_index().sort_values("week")
+att_weekly["rate"] = att_weekly["rate"] * 100
 att_weekly["rolling_mean"] = att_weekly["rate"].rolling(4, min_periods=2, center=True).mean()
 att_weekly["rolling_std"] = att_weekly["rate"].rolling(4, min_periods=2, center=True).std()
 att_weekly["is_dip"] = att_weekly["rate"] < (att_weekly["rolling_mean"] - att_weekly["rolling_std"])
@@ -252,11 +247,10 @@ st.markdown("")
 
 # ── Heatmap ──
 st.subheader("Monthly Attendance Heatmap by Group")
-att_gm = (
-    att.groupby(["group_id", "month"])
-    .apply(lambda g: (g["status"] == "attended").mean() * 100)
-    .reset_index(name="rate")
-)
+att_gm = att.groupby(["group_id", "month"]).agg(
+    rate=("is_attended", "mean"),
+).reset_index()
+att_gm["rate"] = att_gm["rate"] * 100
 att_gm["month_label"] = att_gm["month"].dt.strftime("%b %Y")
 pivot = att_gm.pivot(index="group_id", columns="month_label", values="rate")
 mo = att_gm.drop_duplicates("month").sort_values("month")["month_label"].tolist()
