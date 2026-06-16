@@ -172,173 +172,21 @@ fig_heat.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0,
 st.plotly_chart(fig_heat, use_container_width=True)
 st.caption("A full red column = ALL groups disengaged that month (cohort-wide event). Isolated red cells = group-specific issues.")
 
-st.markdown("")
-
-# ── Relationship between Attendance and Grades ──
-st.subheader("📈 Do students with better attendance get better grades?")
-st.markdown("_Tracking the direct impact of showing up to sessions._")
-
-# Calculate attendance rate per student using att_raw
-student_att_rate = att_raw.assign(is_attended=att_raw["status"] == "attended").groupby("student_id")["is_attended"].mean() * 100
-student_att_rate = student_att_rate.reset_index(name="attendance_rate")
-
-grades_copy = grades.copy()
-if "score_pct" not in grades_copy.columns:
-    grades_copy["score_pct"] = (grades_copy["score"] / grades_copy["max_score"]) * 100
-student_avg_grade = grades_copy.groupby("student_id")["score_pct"].mean().reset_index(name="average_grade")
-
-att_grade_df = pd.merge(student_att_rate, student_avg_grade, on="student_id", how="inner")
-correlation = att_grade_df["attendance_rate"].corr(att_grade_df["average_grade"])
-
-fig_scatter = px.scatter(
-    att_grade_df, x="attendance_rate", y="average_grade",
-    title="Attendance vs Average Grades",
-    labels={"attendance_rate": "Attendance Rate (%)", "average_grade": "Average Grade (%)"},
-    opacity=0.7, color_discrete_sequence=["#34d399"]
-)
-
-# Add trendline manually to avoid statsmodels dependency issues
-if len(att_grade_df) > 1:
-    z = np.polyfit(att_grade_df["attendance_rate"], att_grade_df["average_grade"], 1)
-    p = np.poly1d(z)
-    att_grade_df_sorted = att_grade_df.sort_values("attendance_rate")
-    
-    fig_scatter.add_trace(go.Scatter(
-        x=att_grade_df_sorted["attendance_rate"],
-        y=p(att_grade_df_sorted["attendance_rate"]),
-        mode="lines",
-        name="General Trend",
-        line=dict(color="#fbbf24", width=3, dash="dash")
-    ))
-
-fig_scatter.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=50, b=10))
-st.plotly_chart(fig_scatter, use_container_width=True)
-
-st.info(f'''
-**What does this mean for the students?**
-- **The Pattern:** We can see that {'students who attend more sessions generally score higher on their assignments and exams.' if correlation > 0 else 'there is no obvious impact of attendance on grades.'}
-- **The Yellow Line:** This line shows the general direction. It goes {'up, meaning better attendance equals better grades.' if correlation > 0 else 'down or stays flat, meaning attendance does not guarantee better grades.'}
-- **The Real Takeaway:** Encourage students to show up! The data clearly shows that those who participate consistently have a much easier time succeeding in the course.
-''')
-
 st.divider()
-
-# ═══════════════════════════════════════════════════
-# SECTION 1B — Attendance (session + proxy)
-# ═══════════════════════════════════════════════════
-
-st.header("📅 Attendance Over the 6-Month Term")
-st.markdown("""
-_Session attendance records are available for **December 2025 only**.  
-To track attendance across all 6 months, we measure **platform attendance** — how many days each student was active on the platform._
-""")
-
-# ── Proxy attendance: active days per student per month ──
-eng_copy = eng.copy()
-eng_copy["date"] = eng_copy["event_datetime"].dt.date
-proxy_monthly = eng_copy.groupby("month").agg(
-    total_active_days=("date", "nunique"),
-    unique_students=("student_id", "nunique"),
-).reset_index().sort_values("month")
-
-# Per-student active days
-student_month = eng_copy.groupby(["student_id", "month"])["date"].nunique().reset_index(name="active_days")
-student_month["month_days"] = student_month["month"].dt.days_in_month
-student_month["attendance_pct"] = (student_month["active_days"] / student_month["month_days"]) * 100
-
-proxy_rate = student_month.groupby("month")["attendance_pct"].mean().reset_index()
-proxy_rate.columns = ["month", "avg_attendance_pct"]
-proxy_rate["month_label"] = proxy_rate["month"].dt.strftime("%b %Y")
-
-# ── Session attendance (Dec only) ──
-dec_att_rate = overall_att_rate
-
-# KPIs
-col_a1, col_a2, col_a3, col_a4 = st.columns(4)
-col_a1.metric("Dec Session Attendance", f"{dec_att_rate:.1f}%")
-avg_proxy = proxy_rate["avg_attendance_pct"].mean()
-col_a2.metric("Avg Platform Attendance", f"{avg_proxy:.1f}%")
-worst_proxy = proxy_rate.loc[proxy_rate["avg_attendance_pct"].idxmin()]
-best_proxy = proxy_rate.loc[proxy_rate["avg_attendance_pct"].idxmax()]
-col_a3.metric("Weakest Month", worst_proxy["month_label"], f"{worst_proxy['avg_attendance_pct']:.1f}%")
-col_a4.metric("Strongest Month", best_proxy["month_label"], f"{best_proxy['avg_attendance_pct']:.1f}%")
-
-st.markdown("")
-
-# ── Chart: Platform attendance by month ──
-st.subheader("📊 Platform Attendance Rate — Each Month")
-st.markdown("_% of days in the month that the average student was active on the platform_")
-
-avg_p = proxy_rate["avg_attendance_pct"].mean()
-p_colors = ["#10b981" if v >= avg_p else "#ef4444" for v in proxy_rate["avg_attendance_pct"]]
-
-fig_att = go.Figure()
-fig_att.add_trace(go.Bar(
-    x=proxy_rate["month_label"], y=proxy_rate["avg_attendance_pct"],
-    marker_color=p_colors,
-    text=[f"{v:.1f}%" for v in proxy_rate["avg_attendance_pct"]],
-    textposition="outside", textfont=dict(size=14, color="white"),
-))
-fig_att.add_hline(y=avg_p, line_dash="dot", line_color="#fbbf24", line_width=2,
-                  annotation_text=f"Avg: {avg_p:.1f}%", annotation_position="top left",
-                  annotation_font_color="#fbbf24")
-
-fig_att.update_layout(
-    template="plotly_dark", height=400,
-    title=dict(text=f"Platform Attendance Rate — {TERM_LABEL}", font=dict(size=16)),
-    margin=dict(l=10, r=10, t=60, b=10), font=dict(size=12), bargap=0.3,
-    yaxis=dict(title="Avg % of Days Active", range=[0, proxy_rate["avg_attendance_pct"].max() * 1.3]),
-    xaxis=dict(title=""),
-)
-st.plotly_chart(fig_att, use_container_width=True)
-st.caption("🟢 Green = above average · 🔴 Red = below average · Platform attendance = % of days a student logged in or did any activity")
-
-st.markdown("")
-
-# ── Per-month cards ──
-att_cols = st.columns(min(len(proxy_rate), 6))
-for i, (_, row) in enumerate(proxy_rate.iterrows()):
-    col_idx = i % len(att_cols)
-    pct = row["avg_attendance_pct"]
-    if pct >= avg_p * 1.1:
-        bg = "linear-gradient(135deg, #064e3b, #065f46)"
-        emoji = "✅"
-    elif pct >= avg_p * 0.9:
-        bg = "linear-gradient(135deg, #1e3a5f, #1e40af)"
-        emoji = "📊"
-    else:
-        bg = "linear-gradient(135deg, #7f1d1d, #991b1b)"
-        emoji = "⚠️"
-
-    with att_cols[col_idx]:
-        st.markdown(f"""
-        <div style="background: {bg}; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 8px;">
-            <h4 style="color: white; margin: 0;">{row['month_label']}</h4>
-            <p style="font-size: 28px; font-weight: 800; color: white; margin: 8px 0;">{emoji} {pct:.1f}%</p>
-            <p style="color: #d1d5db; font-size: 12px; margin: 0;">of days students were active</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-st.divider()
-
-# ═══════════════════════════════════════════════════
-# KEY TAKEAWAYS
-# ═══════════════════════════════════════════════════
 
 st.header("📋 Key Takeaways")
 
 st.markdown(f"""
 <div style="background: linear-gradient(135deg, #064e3b, #065f46); border-radius: 12px; padding: 20px;">
-    <h4 style="color: #34d399; margin-bottom: 10px;">📅 Attendance Trends ({TERM_LABEL})</h4>
+    <h4 style="color: #34d399; margin-bottom: 10px;">📅 Engagement Trends ({TERM_LABEL})</h4>
     <ul style="color: #a7f3d0; font-size: 14px; line-height: 1.8;">
-        <li>Attendance and engagement generally rise and fall together</li>
-        <li>Dip weeks often align with holidays, exam seasons, or Ramadan</li>
-        <li>The heatmap shows whether dips hit all groups or just some</li>
-        <li>Reaching out to students during dip windows can prevent dropouts</li>
+        <li>Engagement (events per student) naturally fluctuates throughout the term.</li>
+        <li>The heatmap clearly shows whether dips are cohort-wide or isolated to specific groups.</li>
+        <li>Monitoring these metrics allows for timely interventions before students drop off completely.</li>
     </ul>
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown("")
-render_save_ui("temporal_data", "Temporal Analysis data", dataframe_to_dict(proxy_rate))
+render_save_ui("engagement_data", "Engagement Analysis data", dataframe_to_dict(eng_monthly))
 
