@@ -151,7 +151,7 @@ top_students["teach_score"] = (
 top_students = top_students.sort_values("teach_score", ascending=False)
 
 st.info(f"Found **{len(top_students)} students** who meet the criteria for instructor candidacy "
-        f"(avg_score ≥85%, attendance ≥90%, fail_rate ≤5%).")
+        f"(avg score ≥ 85%, attendance ≥ 90%, fail rate ≤ 5%).")
 
 candidates = top_students[["student_id", "full_name", "age", "city", "category",
                            "difficulty_level", "avg_concept_score", "attendance_rate_pct",
