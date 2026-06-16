@@ -5,27 +5,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
-from utils import page_config, show_logo, show_top_logo
+from utils import page_config, show_logo, show_top_logo, load_attendance, load_engagement, load_grades
 from db_utils import require_auth, render_save_ui, dataframe_to_dict
 
 require_auth()
 page_config("Kayfa — Temporal Analysis", "📉")
 show_logo()
 show_top_logo()
-
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-@st.cache_data
-def load_attendance():
-    return pd.read_csv(os.path.join(BASE, "clean_attendance (1).csv"), parse_dates=["session_datetime"])
-
-@st.cache_data
-def load_engagement():
-    return pd.read_csv(os.path.join(BASE, "clean_engagement.csv"), parse_dates=["event_datetime"])
-
-@st.cache_data
-def load_grades():
-    return pd.read_csv(os.path.join(BASE, "clean_grades.csv"), parse_dates=["date"])
 
 att_raw = load_attendance()
 eng_raw = load_engagement()
