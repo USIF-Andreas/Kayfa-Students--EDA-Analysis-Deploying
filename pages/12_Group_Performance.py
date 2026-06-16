@@ -53,15 +53,21 @@ with col1:
     st.caption("Groups sorted by average concept score. Performance varies across cohorts.")
 
 with col2:
-    st.subheader("Group Summary")
-    for _, row in group_stats.iterrows():
-        emoji = "📈" if row["avg_concept"] > master["avg_concept_score"].mean() else "📉"
-        st.markdown(
-            f"{emoji} **{row['group_id']}** ({int(row['count'])} students)  \n"
-            f"Score: {row['avg_concept']:.1f}% | Att: {row['avg_attendance']:.0f}%  \n"
-            f"Fail: {row['avg_fail']:.1f}% | Late: {row['avg_late']*100:.0f}%"
-        )
-        st.markdown("---")
+    st.subheader("💡 Professional Insights")
+    
+    best_group = group_stats.iloc[0]
+    worst_group = group_stats.iloc[-1]
+    
+    st.info(f"""
+    **Top Performers:**  
+    **{best_group['group_id']}** is leading the cohort with a strong average concept score of **{best_group['avg_concept']:.1f}%**. Their solid attendance ({best_group['avg_attendance']:.0f}%) is a key driver behind this success.
+    
+    **Areas of Concern:**  
+    On the other hand, **{worst_group['group_id']}** needs extra support. With an average score of **{worst_group['avg_concept']:.1f}%**, they are currently struggling the most among all groups.
+    
+    **Recommendation:**  
+    We recommend investigating whether **{worst_group['group_id']}** is facing scheduling conflicts or lacks essential resources. Setting up peer-mentoring sessions between **{best_group['group_id']}** and **{worst_group['group_id']}** could also help bridge the gap.
+    """)
 
 st.divider()
 

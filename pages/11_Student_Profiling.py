@@ -57,7 +57,7 @@ with col2:
     st.plotly_chart(fig2, use_container_width=True)
 
 st.markdown("")
-st.subheader("💡 Professional Insights")
+st.subheader("💡Insights")
 st.info(f"""
 **Age & Performance Trend:**  
 The data shows that the **{best_age['Age Band']}** age band performs the best across the board, with the highest average grades ({best_age['Avg Grade %']:.1f}%) and attendance rates ({best_age['Avg Attendance %']:.1f}%). 
