@@ -9,6 +9,18 @@ CSV_PATH = os.path.join(BASE, "master_student_features (1).csv")
 def load_data():
     return pd.read_csv(CSV_PATH)
 
+@st.cache_data
+def load_attendance():
+    return pd.read_csv(os.path.join(BASE, "clean_attendance (1).csv"), parse_dates=["session_datetime"])
+
+@st.cache_data
+def load_engagement():
+    return pd.read_csv(os.path.join(BASE, "clean_engagement.csv"), parse_dates=["event_datetime"])
+
+@st.cache_data
+def load_grades():
+    return pd.read_csv(os.path.join(BASE, "clean_grades.csv"), parse_dates=["date"])
+
 def load_all():
     return {"master": load_data()}
 
