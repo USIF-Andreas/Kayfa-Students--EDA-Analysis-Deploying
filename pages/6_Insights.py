@@ -155,7 +155,7 @@ st.info(f"Found **{len(top_students)} students** who meet the criteria for instr
 
 candidates = top_students[["student_id", "full_name", "age", "city", "category",
                            "difficulty_level", "avg_concept_score", "attendance_rate_pct",
-                           "concept_fail_pct", "instructor", "teach_score"]].head(20)
+                           "concept_fail_pct", "instructor", "teach_score"]].head(3)
 
 for _, row in candidates.iterrows():
     with st.container(border=True):
@@ -228,18 +228,20 @@ recs = [
      "Redesign instructional materials for the hardest concepts identified in the data."),
 ]
 
-for emoji, title, desc in recs:
-    with st.container(border=True):
-        st.markdown(f"### {emoji} {title}")
-        st.markdown(desc)
+rec_cols = st.columns(2)
+for i, (emoji, title, desc) in enumerate(recs):
+    with rec_cols[i % 2]:
+        with st.container(border=True):
+            st.markdown(f"#### {emoji} {title}")
+            st.markdown(f"<span style='font-size: 14px; color: #cbd5e1;'>{desc}</span>", unsafe_allow_html=True)
 
 avg_late_rate = master["late_rate"].mean() * 100
 chronic = (master["late_rate"] >= 0.5).sum()
 below60 = (master["avg_concept_score"] < 60).sum()
 
 st.divider()
-st.header("🎯 Is Kayfa Worth It?")
-st.markdown("##### A Data-Driven Verdict")
+st.header("🚀 Phase 2: Business Expansion Strategy")
+st.markdown("##### Moving from Proof-of-Concept to Scaling Operations")
 
 worth_col1, worth_col2 = st.columns([2, 1])
 
@@ -248,34 +250,26 @@ with worth_col1:
     top_10_pct = master["avg_concept_score"].quantile(0.9)
     st.markdown(f"""
     After analyzing **{len(master)} students** across **{master['city'].nunique()} cities**, **{master['category'].nunique()} categories**,
-    and **{master['course_name'].nunique()} courses** led by **{master['instructor'].nunique()} instructors**, here is what the data says:
+    and **{master['course_name'].nunique()} courses** led by **{master['instructor'].nunique()} instructors**, Kayfa has proven its core product works.
+    
+    Here is the roadmap to scale the business to the next level:
 
-    #### ✅ The Case for Kayfa
+    #### 📈 Step 1: Scale the Teaching Pipeline
+    We identified **{len(top_students)} exceptional students** ({len(top_students)/len(master)*100:.1f}% of the population)
+    who combine top-tier scores (≥85%), near-perfect attendance (≥90%), and minimal fail rates.
+    **Business Action:** Launch the *Kayfa Fellows Program*. Hire these top graduates as teaching assistants or junior instructors. This drastically reduces hiring costs while ensuring new instructors already understand the platform.
 
-    1. **Strong Overall Outcomes** — The average concept score across all students is **{master['avg_concept_score'].mean():.1f}%**,
-       and the average grade is **{master['avg_grade'].mean():.1f}%**. This indicates the curriculum delivers solid learning outcomes.
+    #### 🤖 Step 2: Automate Retention
+    Currently, **{avg_late_rate:.1f}%** of submissions are late, and **{below60:.0f} students** score below 60%. These are our primary drop-off risks.
+    **Business Action:** Build an automated CRM / Early Warning System. When a student's late rate hits 50%, or they enter the "At-Risk" persona, trigger an automated sequence or a success coach intervention to save the revenue and the student.
 
-    2. **High Engagement** — With **{master['total_events'].sum():,.0f}** tracked events (avg **{master['total_events'].mean():.0f}** per student),
-       learners are actively using the platform.
+    #### 🌍 Step 3: Geographic Expansion
+    Cairo and Alexandria are performing well, but Fayoum and Asyut lag by **{master['avg_concept_score'].mean() - master[master['city'].isin(['Fayoum','Asyut'])]['avg_concept_score'].mean():.1f}%**.
+    **Business Action:** To expand market share in secondary cities, we cannot use the exact same playbook. We must introduce localized pacing, offline-friendly app features for lower bandwidth, and city-specific marketing campaigns.
 
-    3. **Talent Pipeline Potential** — We identified **{len(top_students)} students** ({len(top_students)/len(master)*100:.1f}% of the population)
-       who combine top-tier scores (≥85%), near-perfect attendance (≥90%), and minimal fail rates (≤5%).
-       These candidates could become Kayfa's next generation of instructors — a self-sustaining talent loop.
-
-    4. **Instructor Quality** — The top instructor achieves a **{instructor_metrics.iloc[0]['avg_score']:.1f}%** average student score,
-       proving that great teaching exists within the platform and can be replicated.
-
-    #### ⚠️ Areas for Improvement
-
-    1. **Procrastination is Costly** — **{avg_late_rate:.1f}%** average late rate, and students who submit late score
-       **~8–10 pts lower** on concept assessments. An early-warning system could recover these students.
-
-    2. **Drop-off Risk** — **{below60:.0f} students** ({below60/len(master)*100:.0f}%) score below 60%,
-       and **{chronic} students** are chronically late (≥50% late rate). These groups need structured intervention.
-
-    3. **Geographic Disparity** — Students from Fayoum and Asyut underperform the national average by
-       **{master[master['city'].isin(['Fayoum','Asyut'])]['avg_concept_score'].mean():.1f}%** vs **{master['avg_concept_score'].mean():.1f}%**.
-       Targeted support could close this gap.
+    #### 💰 Step 4: Monetize Engagement
+    With **{master['total_events'].sum():,.0f}** tracked events, engagement is high.
+    **Business Action:** Introduce "Premium Support" add-ons for the *Hard Worker* persona (who needs tutoring) or "Advanced Certifications" for the *High Achiever* persona.
     """)
 
 with worth_col2:
@@ -289,12 +283,10 @@ with worth_col2:
 verdict_col1, verdict_col2 = st.columns([3, 1])
 with verdict_col1:
     st.success(
-        f"**Verdict: YES — Kayfa is delivering value.** "
-        f"The data shows a functioning educational platform with a {pass_rate:.0f}% pass rate, "
-        f"strong instructor talent, and an emerging pipeline of student-to-teacher candidates. "
-        f"The core product works. The path to excellence lies in tackling procrastination, "
-        f"closing geographic gaps, and improving time management — all clearly "
-        f"measurable and actionable from this dashboard."
+        f"**Executive Verdict: Ready to Scale.** "
+        f"Kayfa has achieved product-market fit with a {pass_rate:.0f}% pass rate and highly engaged users. "
+        f"The focus for Phase 2 must shift from curriculum validation to automated retention, localized expansion, "
+        f"and converting our best students into our next generation of teachers."
     )
 
 st.divider()
