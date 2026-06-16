@@ -166,42 +166,6 @@ for _, row in candidates.iterrows():
         r4.metric("Attendance", f"{row['attendance_rate_pct']:.0f}%")
         r5.metric("Teach Score", f"{row['teach_score']:.1f}", delta=f"Fail Rate: {row['concept_fail_pct']:.1f}%")
 
-st.divider()
-
-col_c, col_d = st.columns(2)
-
-with col_c:
-    fig = px.scatter(
-        master,
-        x="avg_concept_score",
-        y="attendance_rate_pct",
-        color="concept_fail_pct",
-        size="concept_fail_pct",
-        hover_data=["full_name", "instructor"],
-        color_continuous_scale="RdYlGn_r",
-        title="Candidate Identification Map",
-        labels={"avg_concept_score": "Avg Concept Score %", "attendance_rate_pct": "Attendance %"},
-    )
-    fig.add_hline(y=90, line_dash="dash", line_color="white", opacity=0.3)
-    fig.add_vline(x=85, line_dash="dash", line_color="white", opacity=0.3)
-    fig.add_annotation(x=92, y=95, text="Candidate Zone", showarrow=False,
-                       font=dict(color="lime", size=14))
-    fig.update_layout(template="plotly_dark", height=450, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
-
-with col_d:
-    cat_counts = candidates["category"].value_counts().reset_index()
-    cat_counts.columns = ["category", "count"]
-    fig = px.pie(
-        cat_counts,
-        values="count",
-        names="category",
-        hole=0.4,
-        color_discrete_sequence=px.colors.qualitative.Set2,
-        title="Candidates by Category",
-    )
-    fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=40, b=0), font=dict(size=11))
-    st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 
