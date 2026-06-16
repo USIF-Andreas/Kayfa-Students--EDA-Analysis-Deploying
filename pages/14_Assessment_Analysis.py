@@ -4,19 +4,13 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import os
-from utils import page_config, show_logo, show_top_logo
+from utils import page_config, show_logo, show_top_logo, load_grades
 from db_utils import require_auth, render_save_ui, dataframe_to_dict
 
 require_auth()
 page_config("Kayfa — Assessment Analysis", "📊")
 show_logo()
 show_top_logo()
-
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-@st.cache_data
-def load_grades():
-    return pd.read_csv(os.path.join(BASE, "clean_grades.csv"), parse_dates=["date"])
 
 grades = load_grades()
 
